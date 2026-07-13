@@ -15,6 +15,43 @@ st.set_page_config(page_title="Controle de Faturamento", layout="wide")
 LISTA_CLIENTES = ["AWS", "ZFGROUP"]
 
 # ==========================================
+# FUNÇÕES AUXILIARES DE FORMATAÇÃO (BRL e DD/MM/AAAA)
+# ==========================================
+def formatar_brl(valor):
+    """Transforma um float/int no formato R$ X.XXX,XX"""
+    try:
+        return f"R$ {float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except:
+        return str(valor)
+
+def formatar_data(data_orig):
+    """Transforma uma data YYYY-MM-DD ou objeto date para DD/MM/AAAA"""
+    if not data_orig or data_orig == "-":
+        return data_orig
+    try:
+        if isinstance(data_orig, str):
+            if "T" in data_orig:
+                dt = datetime.strptime(data_orig.split("T")[0], "%Y-%m-%d")
+            else:
+                dt = datetime.strptime(data_orig, "%Y-%m-%d")
+        else:
+            dt = data_orig
+        return dt.strftime("%d/%m/%Y")
+    except:
+        return str(data_orig)
+
+def formatar_data_hora(dt_str):
+    """Transforma um timestamp do banco para DD/MM/AAAA HH:MM:SS"""
+    if not dt_str:
+        return dt_str
+    try:
+        dt_str = dt_str.replace("T", " ").split(".")[0]
+        dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+        return dt.strftime("%d/%m/%Y %H:%M:%S")
+    except:
+        return str(dt_str)
+
+# ==========================================
 # CONFIGURAÇÃO DO BANCO DE DADOS (SUPABASE API)
 # ==========================================
 @st.cache_resource
@@ -45,7 +82,7 @@ def hash_senha(senha):
 class PDFRelatorio(FPDF):
     def header(self):
         self.set_font('Arial', 'B', 14)
-        self.cell(0, 10, 'Relatório de Faturamento', 0, 1, 'C')
+        self.cell(0, 10, 'Relatorio de Faturamento', 0, 1, 'C')
         self.ln(5)
 
 def gerar_pdf(dados, titulo):
@@ -57,14 +94,14 @@ def gerar_pdf(dados, titulo):
     
     pdf.cell(40, 10, "Data", border=1)
     pdf.cell(50, 10, "Cliente", border=1)
-    pdf.cell(40, 10, "Valor (R$)", border=1)
+    pdf.cell(40, 10, "Valor", border=1)
     pdf.cell(50, 10, "Lancado Por", border=1)
     pdf.ln()
     
     for row in dados:
-        pdf.cell(40, 10, str(row['data_lancamento']), border=1)
+        pdf.cell(40, 10, formatar_data(row['data_lancamento']), border=1)
         pdf.cell(50, 10, str(row['cliente']), border=1)
-        pdf.cell(40, 10, f"R$ {row['valor']:.2f}", border=1)
+        pdf.cell(40, 10, formatar_brl(row['valor']), border=1)
         pdf.cell(50, 10, str(row['nome_usuario']), border=1)
         pdf.ln()
         
@@ -135,7 +172,6 @@ def dashboard():
         df_semana['data_lancamento'] = df_semana['data_lancamento'].astype(str)
         datas_com_lancamento = df_semana['data_lancamento'].unique()
         
-        # Para cada data que possui movimentação, garante que os outros clientes apareçam como PENDENTE
         for data_v in datas_com_lancamento:
             clientes_na_data = df_semana[df_semana['data_lancamento'] == data_v]['cliente'].unique()
             for cli in LISTA_CLIENTES:
@@ -150,7 +186,6 @@ def dashboard():
         if linhas_extras:
             df_semana = pd.concat([df_semana, pd.DataFrame(linhas_extras)], ignore_index=True)
     else:
-        # Se não há nenhum arquivo lançado na semana inteira, mostra a data de hoje como PENDENTE para todos
         data_hoje_str = hoje.strftime("%Y-%m-%d")
         for cli in LISTA_CLIENTES:
             linhas_extras.append({
@@ -168,9 +203,9 @@ def dashboard():
             totais[status_tipo] = float(df_semana[df_semana['status'] == status_tipo]['valor'].sum())
             
     col1, col2, col3 = st.columns(3)
-    col1.metric("🟢 Faturado", f"R$ {totais['FATURADO']:.2f}")
-    col2.metric("🔴 Pendente", f"R$ {totais['PENDENTE']:.2f}")
-    col3.metric("🔵 Pago", f"R$ {totais['PAGO']:.2f}")
+    col1.metric("🟢 Faturado", formatar_brl(totais['FATURADO']))
+    col2.metric("🔴 Pendente", formatar_brl(totais['PENDENTE']))
+    col3.metric("🔵 Pago", formatar_brl(totais['PAGO']))
     
     st.divider()
     
@@ -182,6 +217,8 @@ def dashboard():
     
     if not df_semana.empty:
         df_display = df_semana[['id', 'cliente', 'valor', 'status', 'data_lancamento']].copy()
+        df_display['valor'] = df_display['valor'].apply(formatar_brl)
+        df_display['data_lancamento'] = df_display['data_lancamento'].apply(formatar_data)
         df_display.columns = ['ID', 'Cliente', 'Valor', 'Status', 'Data']
         st.dataframe(df_display.style.map(colorir_status, subset=['Status']), use_container_width=True)
     else:
@@ -194,8 +231,11 @@ def dashboard():
     df_expirados = pd.DataFrame(res_exp.data)
     
     if not df_expirados.empty:
-        df_expirados.columns = ['Cliente', 'Valor', 'Status', 'Data']
-        st.dataframe(df_expirados.style.map(colorir_status, subset=['Status']), use_container_width=True)
+        df_exp_display = df_expirados[['cliente', 'valor', 'status', 'data_lancamento']].copy()
+        df_exp_display['valor'] = df_exp_display['valor'].apply(formatar_brl)
+        df_exp_display['data_lancamento'] = df_exp_display['data_lancamento'].apply(formatar_data)
+        df_exp_display.columns = ['Cliente', 'Valor', 'Status', 'Data']
+        st.dataframe(df_exp_display.style.map(colorir_status, subset=['Status']), use_container_width=True)
     else:
         st.success("Tudo em dia! Nenhum faturamento pendente ou expirado.")
 
@@ -214,8 +254,7 @@ def lancar_novo():
                 valores_coluna = pd.to_numeric(df[col_valor[0]], errors='coerce')
                 valor_total = float(valores_coluna.iloc[:-1].sum())
                 
-                valor_brl = f"R$ {valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                st.success(f"Valor total calculado da planilha (última linha ignorada): {valor_brl}")
+                st.success(f"Valor total calculado da planilha (última linha ignorada): {formatar_brl(valor_total)}")
             else:
                 st.error("Coluna 'Valor' não encontrada na planilha.")
         except Exception as e:
@@ -234,14 +273,12 @@ def lancar_novo():
                 "valor": valor_total,
                 "arquivo_nome": arquivo.name,
                 "arquivo_blob": blob_hex,
-                "status": "FATURADO",  # Alterado automaticamente para FATURADO ao lançar
+                "status": "FATURADO",
                 "data_lancamento": data_hoje,
                 "lancado_por": st.session_state['user_id']
             }).execute()
             
-            valor_brl_log = f"R$ {valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            registrar_log("INSERÇÃO", f"Faturamento de {valor_brl_log} lançado para {cliente} com status FATURADO.")
-            
+            registrar_log("INSERÇÃO", f"Faturamento de {formatar_brl(valor_total)} lançado para {cliente} com status FATURADO.")
             st.success("Faturamento lançado com sucesso com status FATURADO!")
         except Exception as e:
             st.error(f"Erro ao salvar no banco de dados: {e}")
@@ -260,7 +297,10 @@ def pesquisar_faturamento():
     if rows:
         for row in rows:
             nome_usuario = row['usuarios']['nome'] if row.get('usuarios') else "Desconhecido"
-            with st.expander(f"{row['cliente']} - R$ {row['valor']} ({row['data_lancamento']})"):
+            v_brl = formatar_brl(row['valor'])
+            d_pt = formatar_data(row['data_lancamento'])
+            
+            with st.expander(f"{row['cliente']} - {v_brl} ({d_pt})"):
                 st.write(f"**Lançado por:** {nome_usuario}")
                 st.write(f"**Arquivo original:** {row['arquivo_nome']}")
                 
@@ -292,7 +332,7 @@ def pesquisar_faturamento():
                         supabase.table("faturamentos").delete().eq("id", row['id']).execute()
                         registrar_log("EXCLUSÃO", f"Faturamento ID {row['id']} excluído do sistema.")
                         st.success("Removido com sucesso!")
-                        st.session_state[f"confirm_del_{row['id']}", False]
+                        st.session_state[f"confirm_del_{row['id']}"] = False
                         st.rerun()
     else:
         st.write("Nenhum registro encontrado.")
@@ -371,7 +411,7 @@ def log_interno():
         logs_formatados = []
         for l in res_logs.data:
             logs_formatados.append({
-                'Data e Hora': l['data_hora'],
+                'Data e Hora': formatar_data_hora(l['data_hora']),
                 'Usuário': l['usuarios']['nome'] if l.get('usuarios') else "Desconhecido",
                 'Ação Efetuada': l['acao'],
                 'Detalhes da Operação': l['detalhes']
