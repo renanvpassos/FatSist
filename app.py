@@ -377,11 +377,19 @@ def dashboard():
         
     if not df_semana.empty:
         for status_tipo in totais.keys():
-            totais[status_tipo] = float(df_semana[df_semana['status'] == status_tipo]['valor'].sum())
+            if status_tipo == 'PENDENTE':
+                # Conta a quantidade de linhas em vez de somar o valor
+                totais[status_tipo] = int(df_semana[df_semana['status'] == status_tipo].shape[0])
+            else:
+                # Soma os valores para os outros tipos
+                totais[status_tipo] = float(df_semana[df_semana['status'] == status_tipo]['valor'].sum())
             
     col1, col2, col3 = st.columns(3)
     col1.metric("🟢 Faturado", formatar_brl(totais['FATURADO']))
-    col2.metric("🔴 Pendente", formatar_brl(totais['PENDENTE']))
+    
+    # Exibe como número inteiro (quantidade)
+    col2.metric("🔴 Pendente", int(totais['PENDENTE'])) 
+    
     col3.metric("🔵 Pago", formatar_brl(totais['PAGO']))
     
     st.divider()
