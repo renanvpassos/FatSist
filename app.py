@@ -6,6 +6,12 @@ import hashlib
 from fpdf import FPDF
 import io
 import base64
+import time
+
+# ==========================================
+# CONFIGURAÇÃO DA PÁGINA
+# ==========================================
+st.set_page_config(page_title="Controle de Faturamento", layout="wide")
 
 # ==========================================
 # FUNÇÃO PARA EXIBIR INTRO COM LOADING
@@ -28,11 +34,14 @@ def mostrar_intro():
                 align-items: center;
                 background-color: white;
                 z-index: 9999;
-                transition: opacity 1s ease-in-out;
+                transition: opacity 0.8s ease-in-out;
             }
-            .intro-container.fade-out {
+            .intro-container.hidden {
                 opacity: 0;
                 pointer-events: none;
+            }
+            .intro-container.removed {
+                display: none !important;
             }
             .logo-image {
                 max-width: 400px;
@@ -86,7 +95,7 @@ def mostrar_intro():
     # Obtém a logo em base64
     logo_base64 = get_logo_base64()
     
-    # Container da intro com a logo
+    # Container da intro
     intro_html = f"""
         <div id="intro-container" class="intro-container">
             <img src="data:image/png;base64,{logo_base64}" class="logo-image" alt="Logo">
@@ -101,23 +110,36 @@ def mostrar_intro():
         </div>
         
         <script>
-            // Aguarda 5 segundos e depois remove a intro com fade-out
+            // Função para esconder a intro após 5 segundos
             setTimeout(function() {{
                 var container = document.getElementById('intro-container');
                 if (container) {{
-                    container.classList.add('fade-out');
+                    // Adiciona classe para fade-out
+                    container.classList.add('hidden');
+                    
                     // Remove completamente do DOM após a animação
                     setTimeout(function() {{
                         if (container) {{
-                            container.style.display = 'none';
+                            container.classList.add('removed');
                         }}
-                    }}, 1000);
+                    }}, 800);
                 }}
             }}, 5000);
         </script>
     """
     
-    st.markdown(intro_html, unsafe_allow_html=True)
+    # Usa um placeholder para exibir a intro
+    placeholder = st.empty()
+    placeholder.markdown(intro_html, unsafe_allow_html=True)
+    
+    # Aguarda 5 segundos (a intro some pelo JavaScript)
+    time.sleep(5.5)
+    
+    # Limpa o placeholder para garantir que a intro desapareceu
+    placeholder.empty()
+    
+    # Força um rerun para atualizar a interface
+    st.rerun()
 
 def get_logo_base64():
     """Obtém a logo do repositório GitHub em base64"""
@@ -136,18 +158,19 @@ def get_logo_base64():
                 return base64.b64encode(response.content).decode()
         except:
             pass
-        # Fallback: retorna uma imagem placeholder simples
+        # Fallback: retorna uma imagem placeholder simples com texto
         return "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
 # ==========================================
-# CONFIGURAÇÃO DA PÁGINA
+# INICIALIZAÇÃO DO ESTADO DA INTRO
 # ==========================================
-st.set_page_config(page_title="Controle de Faturamento", layout="wide")
+if 'intro_mostrada' not in st.session_state:
+    st.session_state['intro_mostrada'] = False
 
 # ==========================================
 # EXIBE A INTRO (APENAS NA PRIMEIRA CARGA)
 # ==========================================
-if 'intro_mostrada' not in st.session_state:
+if not st.session_state['intro_mostrada']:
     mostrar_intro()
     st.session_state['intro_mostrada'] = True
 
