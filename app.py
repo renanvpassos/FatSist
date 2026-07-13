@@ -216,11 +216,15 @@ def dashboard():
         return f'color: {cor}; font-weight: bold'
     
     if not df_semana.empty:
-        df_display = df_semana[['id', 'cliente', 'valor', 'status', 'data_lancamento']].copy()
+        # Alteração: Removido 'id' da seleção de colunas
+        df_display = df_semana[['cliente', 'valor', 'status', 'data_lancamento']].copy()
         df_display['valor'] = df_display['valor'].apply(formatar_brl)
         df_display['data_lancamento'] = df_display['data_lancamento'].apply(formatar_data)
-        df_display.columns = ['ID', 'Cliente', 'Valor', 'Status', 'Data']
-        st.dataframe(df_display.style.map(colorir_status, subset=['Status']), use_container_width=True)
+        # Alteração: Removido 'ID' do nome das colunas
+        df_display.columns = ['Cliente', 'Valor', 'Status', 'Data']
+        
+        # Alteração: Adicionado hide_index=True para remover a numeração das linhas
+        st.dataframe(df_display.style.map(colorir_status, subset=['Status']), use_container_width=True, hide_index=True)
     else:
         st.info("Nenhum faturamento nesta semana.")
 
@@ -235,7 +239,9 @@ def dashboard():
         df_exp_display['valor'] = df_exp_display['valor'].apply(formatar_brl)
         df_exp_display['data_lancamento'] = df_exp_display['data_lancamento'].apply(formatar_data)
         df_exp_display.columns = ['Cliente', 'Valor', 'Status', 'Data']
-        st.dataframe(df_exp_display.style.map(colorir_status, subset=['Status']), use_container_width=True)
+        
+        # Alteração: Adicionado hide_index=True aqui também para manter o padrão sem numeração lateral
+        st.dataframe(df_exp_display.style.map(colorir_status, subset=['Status']), use_container_width=True, hide_index=True)
     else:
         st.success("Tudo em dia! Nenhum faturamento pendente ou expirado.")
 
@@ -456,7 +462,7 @@ def main():
         escolha = st.sidebar.radio("Navegar para:", menus)
         
         st.sidebar.divider()
-        if st.sidebar.button("Efetuar Logout (Sair)", type="secondary"):
+        if st.sidebar.button("Logout (Sair)", type="secondary"):
             registrar_log("LOGOUT", "Usuário encerrou a sessão.")
             st.session_state.clear()
             st.rerun()
