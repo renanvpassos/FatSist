@@ -516,33 +516,35 @@ def pesquisar_faturamento():
                     st.write(f"**Lançado por:** {nome_usuario}")
                     
                     if row.get('arquivo_blob'):
+                        # 1. Recuperar os bytes do arquivo
                         hex_str = row['arquivo_blob'].replace('\\x', '')
-                        bytes_zip = bytes.fromhex(hex_str)
+                        bytes_arquivo = bytes.fromhex(hex_str)
                         
-                        # Abre o ZIP apenas para verificar o que tem dentro
-                        with zipfile.ZipFile(io.BytesIO(bytes_zip)) as z:
+                        # 2. Verificar quantos arquivos existem dentro do pacote
+                        with zipfile.ZipFile(io.BytesIO(bytes_arquivo)) as z:
                             lista_arquivos = z.namelist()
                         
-                        # Lógica: Se houver apenas 1 arquivo no banco, o usuário carregou apenas um .xlsx
+                        # 3. Lógica de Download Inteligente
                         if len(lista_arquivos) == 1:
+                            # Se for apenas 1, oferece como Excel (sem opção de ZIP)
                             st.download_button(
                                 label="📥 Baixar Arquivo (Excel)", 
-                                data=bytes_zip, 
+                                data=bytes_arquivo, 
                                 file_name=f"faturamento_{row['id']}.xlsx", 
                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                 key=f"dl_excel_{row['id']}"
                             )
                         else:
-                            # Se houver mais de um, oferece o pacote ZIP
+                            # Se houver mais de um, oferece como ZIP
                             st.download_button(
                                 label="📥 Baixar Arquivos (ZIP)", 
-                                data=bytes_zip, 
+                                data=bytes_arquivo, 
                                 file_name=f"faturamento_{row['id']}.zip", 
                                 mime="application/zip",
                                 key=f"dl_zip_{row['id']}"
                             )
                     
-                    # ... (restante do código de status/exclusão permanece igual)
+                    # 4. Alteração de Status
                     novo_status = st.selectbox("Alterar Status", ['PENDENTE', 'FATURADO', 'PAGO'], 
                                              index=['PENDENTE', 'FATURADO', 'PAGO'].index(row['status']), 
                                              key=f"st_{row['id']}")
@@ -550,17 +552,24 @@ def pesquisar_faturamento():
                     c1, c2 = st.columns(2)
                     if c1.button("Salvar Alteração", key=f"sv_{row['id']}"):
                         supabase.table("faturamentos").update({"status": novo_status}).eq("id", row['id']).execute()
+                        registrar_log("ALTERAÇÃO", f"Status do faturamento ID {row['id']} alterado para {novo_status}")
                         st.success("Status atualizado!")
                         st.rerun()
                         
+                    # 5. Exclusão
                     if c2.button("Excluir Faturamento", type="primary", key=f"del_{row['id']}"):
                         st.session_state[f"confirm_del_{row['id']}"] = True
                     
                     if st.session_state.get(f"confirm_del_{row['id']}", False):
-                        st.warning("⚠️ Tem certeza que deseja excluir?")
-                        if st.button("Sim, Confirmar", key=f"conf_yes_{row['id']}"):
+                        st.warning("⚠️ Tem certeza absoluta que deseja excluir este faturamento?")
+                        if st.button("Sim, Confirmar Exclusão", key=f"conf_yes_{row['id']}"):
                             supabase.table("faturamentos").delete().eq("id", row['id']).execute()
+                            registrar_log("EXCLUSÃO", f"Faturamento ID {row['id']} excluído do sistema.")
+                            st.success("Removido com sucesso!")
+                            st.session_state[f"confirm_del_{row['id']}"] = False
                             st.rerun()
+        else:
+            st.info("Nenhum faturamento encontrado para este cliente.")
 
 def relatorios():
     st.header("📄 Relatórios Gerenciais")
