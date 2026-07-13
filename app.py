@@ -455,9 +455,22 @@ def main():
         st.sidebar.subheader(f"Logado como: {st.session_state['nome']}")
         st.sidebar.caption(f"Nível de Acesso: {st.session_state['cargo']}")
         
-        # Definição dos menus baseado no cargo
         cargo_atual = st.session_state['cargo']
         
+        # 🚨 BLOQUEIO TOTAL PARA O CARGO USER
+        if cargo_atual == 'USER':
+            st.sidebar.error("🔒 Acesso Bloqueado")
+            st.error("⚠️ **Erro de Permissão:** Seu nível de acesso (**USER**) não tem autorização para visualizar nenhuma funcionalidade deste sistema. Entre em contato com o administrador.")
+            
+            st.sidebar.divider()
+            if st.sidebar.button("Logout (Sair)", type="secondary"):
+                registrar_log("LOGOUT", "Usuário sem permissão encerrou a sessão.")
+                st.session_state.clear()
+                st.rerun()
+            
+            return # Interrompe o script aqui para impedir o carregamento de menus ou páginas
+        
+        # Definição dos menus baseado nos demais cargos
         if cargo_atual == 'SUPERVISOR':
             # SUPERVISOR só pode ver o menu "Lançar Novo"
             menus_disponiveis = ["Lançar Novo"]
@@ -467,12 +480,11 @@ def main():
         else:
             # Outros cargos (ADMIN, MASTER, etc.) têm acesso a todos os menus
             menus_disponiveis = ["Dashboard", "Lançar Novo", "Pesquisar Faturamento", "Relatórios"]
-            if st.session_state['cargo'] == 'MASTER':
+            if cargo_atual == 'MASTER':
                 menus_disponiveis.append("Log Interno")
         
         # Para SUPERVISOR, não mostramos o seletor de menu, apenas fixamos em "Lançar Novo"
         if cargo_atual == 'SUPERVISOR':
-            # Barra lateral apenas com informações e logout
             st.sidebar.info("🔒 Você está no modo SUPERVISOR - Acesso apenas à tela de lançamento")
             escolha = "Lançar Novo"
         else:
