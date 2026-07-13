@@ -286,25 +286,25 @@ def lancar_novo():
 def pesquisar_faturamento():
     st.header("🔍 Pesquisar Faturamento")
     
-    # 1. Buscar todos os clientes únicos cadastrados na tabela de faturamentos
+    # 1. Busca APENAS a coluna 'cliente' no banco (garante privacidade e leveza)
     try:
         dados_clientes = supabase.table("faturamentos").select("cliente").execute()
-        # Remove duplicados e ordena em ordem alfabética
+        # Remove nomes duplicados e organiza em ordem alfabética
         lista_clientes = sorted(list(set([row['cliente'] for row in dados_clientes.data if row.get('cliente')])))
     except Exception as e:
         st.error("Erro ao carregar a lista de clientes.")
         lista_clientes = []
 
-    # Opções do selectbox (com uma opção neutra no início)
+    # Cria as opções do menu com o texto inicial neutro
     opcoes_menu = ["Selecione um cliente..."] + lista_clientes
     
-    # 2. Substituição da barra de texto pelo menu selecionável
-    cliente_selecionado = st.selectbox("Filtrar por Cliente", options=opcoes_menu)
+    # 2. Menu de seleção exibindo APENAS os nomes dos clientes
+    cliente_selecionado = st.selectbox("Selecione o Cliente", options=opcoes_menu)
     
-    # 3. Só exibe os dados se o usuário selecionar um cliente real
+    # 3. Os faturamentos e valores SÓ aparecem se um cliente real for clicado
     if cliente_selecionado != "Selecione um cliente...":
         
-        # Busca os faturamentos específicos do cliente selecionado
+        # Busca os dados completos (valores, status, etc.) APENAS do cliente selecionado
         res = supabase.table("faturamentos").select("*, usuarios(nome)").eq("cliente", cliente_selecionado).execute()
         rows = res.data
         
@@ -314,6 +314,7 @@ def pesquisar_faturamento():
                 v_brl = formatar_brl(row['valor'])
                 d_pt = formatar_data(row['data_lancamento'])
                 
+                # Os valores financeiros só aparecem aqui dentro, após a seleção
                 with st.expander(f"{row['cliente']} - {v_brl} ({d_pt})"):
                     st.write(f"**Lançado por:** {nome_usuario}")
                     st.write(f"**Arquivo original:** {row['arquivo_nome']}")
@@ -334,7 +335,7 @@ def pesquisar_faturamento():
                     if c1.button("Salvar Alteração", key=f"sv_{row['id']}"):
                         supabase.table("faturamentos").update({"status": novo_status}).eq("id", row['id']).execute()
                         registrar_log("ALTERAÇÃO", f"Status do faturamento ID {row['id']} alterado para {novo_status}")
-                        st.success("Status updated!")
+                        st.success("Status atualizado!")
                         st.rerun()
                         
                     if c2.button("Excluir Faturamento", type="primary", key=f"del_{row['id']}"):
