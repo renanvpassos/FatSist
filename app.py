@@ -499,7 +499,27 @@ def pesquisar_faturamento():
                 
                 with st.expander(f"{row['cliente']} - {v_brl} ({d_pt})"):
                     st.write(f"**Lançado por:** {nome_usuario}")
-                    st.write(f"**Arquivo original:** {row['arquivo_nome']}")
+                    
+                    # Se 'arquivo_nome' for uma lista (ou string separada por vírgula), vamos tratar:
+                    nomes_arquivos = [n.strip() for n in row['arquivo_nome'].split(',')]
+                    
+                    st.write("**Arquivos originais:**")
+                    
+                    # Se você salvou o binário como uma lista ou um objeto complexo no Supabase, 
+                    # você precisará adaptar como extrair os bytes. 
+                    # Aqui, estou assumindo que você tem uma lógica para buscar os arquivos 
+                    # individualmente (ex: por uma chave ou ID).
+                    
+                    for idx, nome in enumerate(nomes_arquivos):
+                        # Exemplo: criando um botão para cada nome de arquivo
+                        # NOTA: Aqui você precisaria buscar o binário específico deste arquivo
+                        # Se o blob estiver em uma tabela separada ou estruturado, busque-o aqui:
+                        st.download_button(
+                            label=f"📥 {nome}", 
+                            data=b"", # Substitua pela lógica de recuperação do binário deste arquivo específico
+                            file_name=nome, 
+                            key=f"dl_{row['id']}_{idx}"
+                        )
                     
                     if row.get('arquivo_blob'):
                         try:
