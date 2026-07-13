@@ -431,9 +431,9 @@ def lancar_novo():
             col_valor = [col for col in df.columns if col.upper() == 'VALOR']
             if col_valor:
                 valores_coluna = pd.to_numeric(df[col_valor[0]], errors='coerce')
-                valor_total = float(valores_coluna.iloc[:-1].sum())
+                valor_total = float(valores_coluna.sum())
                 
-                st.success(f"Valor total calculado da planilha (última linha ignorada): {formatar_brl(valor_total)}")
+                st.success(f"Valor total calculado da planilha: {formatar_brl(valor_total)}")
             else:
                 st.error("Coluna 'Valor' não encontrada na planilha.")
         except Exception as e:
