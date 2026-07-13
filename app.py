@@ -172,8 +172,13 @@ def lancar_novo():
             df = pd.read_excel(arquivo)
             col_valor = [col for col in df.columns if col.upper() == 'VALOR']
             if col_valor:
-                valor_total = float(pd.to_numeric(df[col_valor[0]], errors='coerce').sum())
-                st.success(f"Valor total calculado da planilha: R$ {valor_total:.2f}")
+                # 1. Converte a coluna inteira para números, tratando erros
+                valores_coluna = pd.to_numeric(df[col_valor[0]], errors='coerce')
+                
+                # 2. .iloc[:-1] ignora a última linha preenchida antes de fazer o .sum()
+                valor_total = float(valores_coluna.iloc[:-1].sum())
+                
+                st.success(f"Valor total calculado da planilha (última linha ignorada): R$ {valor_total:.2f}")
             else:
                 st.error("Coluna 'Valor' não encontrada na planilha.")
         except Exception as e:
