@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import hashlib
 from fpdf import FPDF
 import io
+import zipfile
 import base64
 import time
 
@@ -454,24 +455,31 @@ def lancar_novo():
     botao_desabilitado = not concordo or not arquivos or valor_total == 0.0
     
     if st.button("Lançar Faturamento", disabled=botao_desabilitado):
-        # Unindo os nomes dos arquivos para salvar no banco
-        nomes_str = ", ".join(nomes_arquivos)
+        # Criar um buffer na memória para o arquivo ZIP
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w") as zf:
+            for arquivo in arquivos:
+                zf.writestr(arquivo.name, arquivo.getvalue())
+        
+        # Gerar o hex do arquivo ZIP único
+        blob_hex = f"\\x{zip_buffer.getvalue().hex()}"
+        nomes_str = ", ".join([a.name for a in arquivos])
         data_hoje = datetime.today().strftime("%Y-%m-%d")
         
         try:
             supabase.table("faturamentos").insert({
                 "cliente": cliente,
                 "valor": valor_total,
-                "arquivo_nome": nomes_str, # Salva o nome de todos os arquivos
+                "arquivo_nome": nomes_str, # Nome dos arquivos concatenados
+                "arquivo_blob": blob_hex,   # O ZIP contendo tudo
                 "status": "FATURADO",
                 "data_lancamento": data_hoje,
                 "lancado_por": st.session_state['user_id']
             }).execute()
             
-            registrar_log("INSERÇÃO", f"Faturamento de {formatar_brl(valor_total)} lançado para {cliente} referente a: {nomes_str}")
-            st.success("Faturamento lançado com sucesso!")
+            st.success("Faturamento lançado com sucesso com os arquivos compactados!")
         except Exception as e:
-            st.error(f"Erro ao salvar no banco de dados: {e}")
+            st.error(f"Erro ao salvar no banco: {e}")
 
 def pesquisar_faturamento():
     st.header("🔍 Pesquisar Faturamento")
