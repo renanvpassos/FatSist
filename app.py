@@ -420,7 +420,8 @@ def dashboard():
 def lancar_novo():
     st.header("📝 Lançar Novo Faturamento")
     
-    cliente = st.selectbox("Selecione o Cliente", LISTA_CLIENTES)
+    cliente = st.selectbox("Selecione o Cliente", sorted(LISTA_CLIENTES))
+    
     arquivo = st.file_uploader("Anexar Planilha de Faturamento (Excel)", type=['xlsx', 'xls'])
     
     valor_total = 0.0
