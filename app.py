@@ -529,9 +529,31 @@ def pesquisar_faturamento():
                             key=f"dl_zip_{row['id']}"
                         )
                         
-                        # 3. Listar e baixar arquivos individuais
+                        # 3. Listar e baixar apenas o arquivo real (excluindo pastas internas do formato .xlsx)
                         with zipfile.ZipFile(io.BytesIO(bytes_zip)) as z:
-                            lista_arquivos = z.namelist()
+                            # Filtra para pegar apenas arquivos que pareçam ser o documento, 
+                            # ou simplesmente ignore as pastas internas se você souber o nome original.
+                            # Uma forma comum é buscar pelo arquivo que está na raiz do zip.
+                            arquivos_uteis = [f for f in z.namelist() if "/" not in f]
+                        
+                            if not arquivos_uteis:
+                                # Se estiver tudo dentro de pastas (como no seu caso), 
+                                # você pode exibir apenas um botão "Baixar Arquivo" que é o próprio ZIP renomeado
+                                st.download_button(
+                                    label=f"📄 Baixar arquivo original",
+                                    data=bytes_zip,
+                                    file_name=f"{cliente_selecionado}.xlsx", # Nome amigável
+                                    key=f"dl_single_{row['id']}"
+                                )
+                            else:
+                                # Se houver arquivos soltos na raiz, mostra eles
+                                for nome_arquivo in arquivos_uteis:
+                                    st.download_button(
+                                        label=f"📄 {nome_arquivo}",
+                                        data=z.read(nome_arquivo),
+                                        file_name=nome_arquivo,
+                                        key=f"dl_{row['id']}_{nome_arquivo}"
+                                    )
                             
                         # LÓGICA ALTERADA: Só mostra os individuais se houver MAIS de 1 arquivo
                         if len(lista_arquivos) > 1:
