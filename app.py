@@ -517,24 +517,26 @@ def pesquisar_faturamento():
                     st.write(f"**Lançado por:** {nome_usuario}")
                     
                     if row.get('arquivo_blob'):
-                        # 1. Recuperar o ZIP da memória
+                        # 1. Recuperar o ZIP (que na verdade é o seu arquivo XLSX)
                         hex_str = row['arquivo_blob'].replace('\\x', '')
-                        bytes_zip = bytes.fromhex(hex_str)
+                        bytes_arquivo = bytes.fromhex(hex_str)
                         
-                        # Definir a lista de arquivos para evitar o NameError
-                        try:
-                            with zipfile.ZipFile(io.BytesIO(bytes_zip)) as z:
-                                lista_arquivos = z.namelist()
-                        except:
-                            lista_arquivos = []
-
-                        # 2. Oferecer download do ZIP completo
+                        # Definimos um nome amigável para o arquivo final
+                        nome_arquivo_final = f"faturamento_{row['id']}.xlsx"
+                        
+                        # 2. Oferecer download do arquivo único (o Excel completo)
+                        # Removemos a necessidade de iterar com zipfile, 
+                        # pois queremos que ele baixe o arquivo inteiro.
                         st.download_button(
-                            label="📥 Baixar arquivo (ZIP)", 
-                            data=bytes_zip, 
-                            file_name=f"faturamento_{row['id']}.zip", 
-                            key=f"dl_zip_{row['id']}"
+                            label="📥 Baixar Arquivo (Excel)", 
+                            data=bytes_arquivo, 
+                            file_name=nome_arquivo_final, 
+                            key=f"dl_excel_{row['id']}"
                         )
+                        
+                        # Se você ainda precisa listar outros arquivos que NÃO sejam Excel, 
+                        # você pode manter uma lógica separada, mas para o XLSX, 
+                        # o botão acima é o suficiente.
                         
                         # 3. Mostrar individuais apenas se houver mais de um arquivo E 
                         # não for apenas a estrutura interna do Excel
