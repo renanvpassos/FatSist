@@ -422,43 +422,54 @@ def lancar_novo():
     
     cliente = st.selectbox("Selecione o Cliente", sorted(LISTA_CLIENTES))
     
-    arquivo = st.file_uploader("Anexar Planilha de Faturamento (Excel)", type=['xlsx', 'xls'])
+    # Adicionado accept_multiple_files=True
+    arquivos = st.file_uploader("Anexar Planilhas de Faturamento (Excel)", type=['xlsx', 'xls'], accept_multiple_files=True)
     
     valor_total = 0.0
-    if arquivo:
-        try:
-            df = pd.read_excel(arquivo)
-            col_valor = [col for col in df.columns if col.upper() == 'VALOR']
-            if col_valor:
-                valores_coluna = pd.to_numeric(df[col_valor[0]], errors='coerce')
-                valor_total = float(valores_coluna.sum())
-                
-                st.success(f"Valor total calculado da planilha: {formatar_brl(valor_total)}")
-            else:
-                st.error("Coluna 'Valor' não encontrada na planilha.")
-        except Exception as e:
-            st.error(f"Erro ao ler a planilha: {e}")
+    nomes_arquivos = []
 
-    concordo = st.checkbox("Concordo que a planilha foi devidamente conferida antes de anexar.")
-    botao_desabilitado = not concordo or arquivo is None or valor_total == 0.0
+    if arquivos:
+        try:
+            soma_acumulada = 0.0
+            for arquivo in arquivos:
+                df = pd.read_excel(arquivo)
+                col_valor = [col for col in df.columns if col.upper() == 'VALOR']
+                
+                if col_valor:
+                    valores_coluna = pd.to_numeric(df[col_valor[0]], errors='coerce')
+                    soma_acumulada += valores_coluna.sum()
+                    nomes_arquivos.append(arquivo.name)
+                else:
+                    st.error(f"Coluna 'Valor' não encontrada no arquivo: {arquivo.name}")
+                    soma_acumulada = 0.0
+                    break
+            
+            valor_total = float(soma_acumulada)
+            st.success(f"Valor total calculado de {len(arquivos)} arquivo(s): {formatar_brl(valor_total)}")
+            
+        except Exception as e:
+            st.error(f"Erro ao processar as planilhas: {e}")
+
+    concordo = st.checkbox("Concordo que as planilhas foram devidamente conferidas.")
+    botao_desabilitado = not concordo or not arquivos or valor_total == 0.0
     
     if st.button("Lançar Faturamento", disabled=botao_desabilitado):
-        blob_hex = f"\\x{arquivo.getvalue().hex()}"
+        # Unindo os nomes dos arquivos para salvar no banco
+        nomes_str = ", ".join(nomes_arquivos)
         data_hoje = datetime.today().strftime("%Y-%m-%d")
         
         try:
             supabase.table("faturamentos").insert({
                 "cliente": cliente,
                 "valor": valor_total,
-                "arquivo_nome": arquivo.name,
-                "arquivo_blob": blob_hex,
+                "arquivo_nome": nomes_str, # Salva o nome de todos os arquivos
                 "status": "FATURADO",
                 "data_lancamento": data_hoje,
                 "lancado_por": st.session_state['user_id']
             }).execute()
             
-            registrar_log("INSERÇÃO", f"Faturamento de {formatar_brl(valor_total)} lançado para {cliente} com status FATURADO.")
-            st.success("Faturamento lançado com sucesso com status FATURADO!")
+            registrar_log("INSERÇÃO", f"Faturamento de {formatar_brl(valor_total)} lançado para {cliente} referente a: {nomes_str}")
+            st.success("Faturamento lançado com sucesso!")
         except Exception as e:
             st.error(f"Erro ao salvar no banco de dados: {e}")
 
