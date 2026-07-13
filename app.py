@@ -189,36 +189,7 @@ if 'intro_exibida' not in st.session_state:
 # CONFIGURAÇÃO GLOBAL DE CLIENTES DO SISTEMA
 # ==========================================
 LISTA_CLIENTES = [
-    "ABL", "ABB", "ADT", "ADVANCED", "AERIS", "AGATA", "AGGREKO", "AGGEKO",
-    "ALVEPAR", "AMCOR", "AMGEM", "AMGEN", "AMVAC", "ANALUB", "ARMANI", "ARES",
-    "ASCOVAL", "AVAMILLER", "AWS", "BALL", "BBAG", "BETA EVENTOS", "BIOPAS",
-    "BLOWTEX", "BOSSA NOVE", "BRACELL", "BRAZDI", "BRAZILIAN", "BURBERRY",
-    "CALIBRE", "CANOAS", "CASTON", "CHANEL (EUROPRESTIGIO)", "CIA", "CIE",
-    "CIE AUTOMETAL", "CINEMARK", "CMPC CELULOSE", "CMPC IGUACU", "CMPC IGUAÇU",
-    "CONFEDERAÇÃO", "CONNECTA", "COPERION", "CORCOVADO ENERGY", "CRYOSTAR",
-    "CUMMINS", "DAF", "DANICA", "DEIF", "DELAVAL", "DIVERSOS", "DOORWIN",
-    "DOW", "DTAS", "ECOBOXES", "ELECNOR", "ELAN", "EMICOL", "ENERGIZER",
-    "EQUIPESCA", "ETHOS", "EXPORTAÇAÕ DIVERSOS", "FASTER", "FERRAGAMO",
-    "FIVEHANDS", "FL", "FLENDER", "FLEXMAKER", "FLINT", "FRONIUS", "FUCHS",
-    "FULLER", "FUNDAÇÃO", "GALSTAFF", "GENERAL MILLS", "GERTEC", "GLOBAL RISER",
-    "GM", "GYPSUM", "HENKEL", "HENGST", "HWASHIN", "HYPERTHERM", "IBERCHEM",
-    "IBM EXPORTAÇÃO", "IBM IMPORTAÇÃO", "INAFLEX", "IND. TEXTIL APUCARANA",
-    "INDUCTOTHERM", "INSTRON BRASIL", "INTERPRINT", "IONPACK", "IREKS",
-    "IWAKI", "JCI", "JHS", "JK GLOBAL", "JOHN DEERE", "JOHNSON BE",
-    "JOHNSON ELETRIC", "JUNTAS UNIVERSAL", "KERING", "KONNEN", "KUIPER",
-    "LA BICI", "LABCOMPANY", "LABORCLIN", "LEGO", "LISBOA", "LOUIS VUITTON",
-    "LV", "MANITOU", "MARCHON", "MARCOLIN", "MAXGEM", "MEAD JOHSON", "MEDEL",
-    "MERCK", "MESSTECHΝΙΚ", "METARLUGICA", "METALAC", "MR DO BRASIL", "MWM",
-    "N & B COME", "NEOENERGIA", "NETZSCH", "NEWELL BRANDS", "NOURYON", "NTN",
-    "OMODA", "ONE TOUCH", "OTIS", "PALL", "PANIZZON", "PHASE", "PLACAR",
-    "PLASTIPAK", "POA", "PRADA", "PRO", "REX TOOLS", "RLG", "ROCHE",
-    "ROLL ROYCE", "ROQUETTE", "ROYAL", "SAAB", "SCANIA", "SCM",
-    "SENSORMATIC", "SERAL OTIS", "SH FORMAS", "SH INDUSTRIA", "SHELL",
-    "SIG", "SIGMA", "SILGAN", "SKY SOLLARIS", "SMITHS", "SMP",
-    "SOC. PANIZZON", "SOLABIA", "SONOVA", "SOUSA", "SOUSA SOLUTIONS",
-    "SPRINGWAY", "STOK AIR", "SURFACE", "TCL", "TECNOVACUM", "TRACK & FIELD",
-    "TURQUEZA", "UNIMIL", "USHIN", "USHIN/MINEBEA", "VERIPOS", "VIPMEDIC",
-    "VISKASE", "WARTISILA", "YASMIN VIEIRA", "ZARA", "ZWICKROELL"
+    "GOLS SAO", "GOLS RIO", "ZF-GROUP", "WARTSILA", "VITOPEL"
 ]
 
 # ==========================================
@@ -343,7 +314,7 @@ def tela_login():
 
     with abas[1]:
         n_nome = st.text_input("Nome Completo")
-        n_user = st.text_input("Novo Usuário")
+        n_user = st.text_input("Nome de usuário ou e-mail")
         n_senha = st.text_input("Nova Senha", type="password")
         if st.button("Solicitar Cadastro"):
             try:
