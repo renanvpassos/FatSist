@@ -455,11 +455,29 @@ def main():
         st.sidebar.subheader(f"Logado como: {st.session_state['nome']}")
         st.sidebar.caption(f"Nível de Acesso: {st.session_state['cargo']}")
         
-        menus = ["Dashboard", "Lançar Novo", "Pesquisar Faturamento", "Relatórios"]
-        if st.session_state['cargo'] == 'MASTER':
-            menus.append("Log Interno")
-            
-        escolha = st.sidebar.radio("Navegar para:", menus)
+        # Definição dos menus baseado no cargo
+        cargo_atual = st.session_state['cargo']
+        
+        if cargo_atual == 'SUPERVISOR':
+            # SUPERVISOR só pode ver o menu "Lançar Novo"
+            menus_disponiveis = ["Lançar Novo"]
+            # Força a seleção para "Lançar Novo" se estiver em outro menu
+            if 'menu_selecionado' not in st.session_state or st.session_state['menu_selecionado'] not in menus_disponiveis:
+                st.session_state['menu_selecionado'] = "Lançar Novo"
+        else:
+            # Outros cargos (ADMIN, MASTER, etc.) têm acesso a todos os menus
+            menus_disponiveis = ["Dashboard", "Lançar Novo", "Pesquisar Faturamento", "Relatórios"]
+            if st.session_state['cargo'] == 'MASTER':
+                menus_disponiveis.append("Log Interno")
+        
+        # Para SUPERVISOR, não mostramos o seletor de menu, apenas fixamos em "Lançar Novo"
+        if cargo_atual == 'SUPERVISOR':
+            # Barra lateral apenas com informações e logout
+            st.sidebar.info("🔒 Você está no modo SUPERVISOR - Acesso apenas à tela de lançamento")
+            escolha = "Lançar Novo"
+        else:
+            # Para outros cargos, mostramos o menu normal
+            escolha = st.sidebar.radio("Navegar para:", menus_disponiveis)
         
         st.sidebar.divider()
         if st.sidebar.button("Logout (Sair)", type="secondary"):
@@ -467,6 +485,7 @@ def main():
             st.session_state.clear()
             st.rerun()
 
+        # Executa a função correspondente ao menu selecionado
         if escolha == "Dashboard":
             dashboard()
         elif escolha == "Lançar Novo":
