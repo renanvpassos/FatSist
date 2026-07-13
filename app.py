@@ -285,57 +285,71 @@ def lancar_novo():
 
 def pesquisar_faturamento():
     st.header("🔍 Pesquisar Faturamento")
-    busca_cliente = st.text_input("Buscar por Cliente")
     
-    query = supabase.table("faturamentos").select("*, usuarios(nome)")
-    if busca_cliente:
-        query = query.ilike("cliente", f"%{busca_cliente}%")
+    # 1. Buscar todos os clientes únicos cadastrados na tabela de faturamentos
+    try:
+        dados_clientes = supabase.table("faturamentos").select("cliente").execute()
+        # Remove duplicados e ordena em ordem alfabética
+        lista_clientes = sorted(list(set([row['cliente'] for row in dados_clientes.data if row.get('cliente')])))
+    except Exception as e:
+        st.error("Erro ao carregar a lista de clientes.")
+        lista_clientes = []
+
+    # Opções do selectbox (com uma opção neutra no início)
+    opcoes_menu = ["Selecione um cliente..."] + lista_clientes
+    
+    # 2. Substituição da barra de texto pelo menu selecionável
+    cliente_selecionado = st.selectbox("Filtrar por Cliente", options=opcoes_menu)
+    
+    # 3. Só exibe os dados se o usuário selecionar um cliente real
+    if cliente_selecionado != "Selecione um cliente...":
         
-    res = query.execute()
-    rows = res.data
-    
-    if rows:
-        for row in rows:
-            nome_usuario = row['usuarios']['nome'] if row.get('usuarios') else "Desconhecido"
-            v_brl = formatar_brl(row['valor'])
-            d_pt = formatar_data(row['data_lancamento'])
-            
-            with st.expander(f"{row['cliente']} - {v_brl} ({d_pt})"):
-                st.write(f"**Lançado por:** {nome_usuario}")
-                st.write(f"**Arquivo original:** {row['arquivo_nome']}")
+        # Busca os faturamentos específicos do cliente selecionado
+        res = supabase.table("faturamentos").select("*, usuarios(nome)").eq("cliente", cliente_selecionado).execute()
+        rows = res.data
+        
+        if rows:
+            for row in rows:
+                nome_usuario = row['usuarios']['nome'] if row.get('usuarios') else "Desconhecido"
+                v_brl = formatar_brl(row['valor'])
+                d_pt = formatar_data(row['data_lancamento'])
                 
-                if row.get('arquivo_blob'):
-                    try:
-                        hex_str = row['arquivo_blob']
-                        if hex_str.startswith('\\x'):
-                            hex_str = hex_str[2:]
-                        bytes_arquivo = bytes.fromhex(hex_str)
-                        st.download_button(label="📥 Fazer Download da Planilha", data=bytes_arquivo, file_name=row['arquivo_nome'], key=f"dl_{row['id']}")
-                    except:
-                        st.caption("Não foi possível processar o arquivo anexo.")
-                
-                novo_status = st.selectbox("Alterar Status", ['PENDENTE', 'FATURADO', 'PAGO'], index=['PENDENTE', 'FATURADO', 'PAGO'].index(row['status']), key=f"st_{row['id']}")
-                
-                c1, c2 = st.columns(2)
-                if c1.button("Salvar Alteração", key=f"sv_{row['id']}"):
-                    supabase.table("faturamentos").update({"status": novo_status}).eq("id", row['id']).execute()
-                    registrar_log("ALTERAÇÃO", f"Status do faturamento ID {row['id']} alterado para {novo_status}")
-                    st.success("Status atualizado!")
-                    st.rerun()
+                with st.expander(f"{row['cliente']} - {v_brl} ({d_pt})"):
+                    st.write(f"**Lançado por:** {nome_usuario}")
+                    st.write(f"**Arquivo original:** {row['arquivo_nome']}")
                     
-                if c2.button("Excluir Faturamento", type="primary", key=f"del_{row['id']}"):
-                    st.session_state[f"confirm_del_{row['id']}"] = True
+                    if row.get('arquivo_blob'):
+                        try:
+                            hex_str = row['arquivo_blob']
+                            if hex_str.startswith('\\x'):
+                                hex_str = hex_str[2:]
+                            bytes_arquivo = bytes.fromhex(hex_str)
+                            st.download_button(label="📥 Fazer Download da Planilha", data=bytes_arquivo, file_name=row['arquivo_nome'], key=f"dl_{row['id']}")
+                        except:
+                            st.caption("Não foi possível processar o arquivo anexo.")
                     
-                if st.session_state.get(f"confirm_del_{row['id']}", False):
-                    st.warning("⚠️ Tem certeza absoluta que deseja excluir este faturamento?")
-                    if st.button("Sim, Confirmar Exclusão", key=f"conf_yes_{row['id']}"):
-                        supabase.table("faturamentos").delete().eq("id", row['id']).execute()
-                        registrar_log("EXCLUSÃO", f"Faturamento ID {row['id']} excluído do sistema.")
-                        st.success("Removido com sucesso!")
-                        st.session_state[f"confirm_del_{row['id']}"] = False
+                    novo_status = st.selectbox("Alterar Status", ['PENDENTE', 'FATURADO', 'PAGO'], index=['PENDENTE', 'FATURADO', 'PAGO'].index(row['status']), key=f"st_{row['id']}")
+                    
+                    c1, c2 = st.columns(2)
+                    if c1.button("Salvar Alteração", key=f"sv_{row['id']}"):
+                        supabase.table("faturamentos").update({"status": novo_status}).eq("id", row['id']).execute()
+                        registrar_log("ALTERAÇÃO", f"Status do faturamento ID {row['id']} alterado para {novo_status}")
+                        st.success("Status updated!")
                         st.rerun()
-    else:
-        st.write("Nenhum registro encontrado.")
+                        
+                    if c2.button("Excluir Faturamento", type="primary", key=f"del_{row['id']}"):
+                        st.session_state[f"confirm_del_{row['id']}"] = True
+                        
+                    if st.session_state.get(f"confirm_del_{row['id']}", False):
+                        st.warning("⚠️ Tem certeza absoluta que deseja excluir este faturamento?")
+                        if st.button("Sim, Confirmar Exclusão", key=f"conf_yes_{row['id']}"):
+                            supabase.table("faturamentos").delete().eq("id", row['id']).execute()
+                            registrar_log("EXCLUSÃO", f"Faturamento ID {row['id']} excluído do sistema.")
+                            st.success("Removido com sucesso!")
+                            st.session_state[f"confirm_del_{row['id']}"] = False
+                            st.rerun()
+        else:
+            st.info("Nenhum faturamento encontrado para este cliente.")
 
 def relatorios():
     st.header("📄 Relatórios Gerenciais")
