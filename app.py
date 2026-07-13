@@ -1,6 +1,5 @@
 import streamlit as st
-import psycopg2
-import psycopg2.extras
+from supabase import create_client, Client
 import pandas as pd
 from datetime import datetime, timedelta
 import hashlib
@@ -11,24 +10,26 @@ import io
 st.set_page_config(page_title="Controle de Faturamento", layout="wide")
 
 # ==========================================
-# CONFIGURAÇÃO DO BANCO DE DADOS (SUPABASE)
+# CONFIGURAÇÃO DO BANCO DE DADOS (SUPABASE API)
 # ==========================================
-def get_db_connection():
-    conn = psycopg2.connect(
-        st.secrets["postgres"]["url"],
-        cursor_factory=psycopg2.extras.DictCursor
-    )
-    return conn
+@st.cache_resource
+def get_supabase_client() -> Client:
+    url = st.secrets["supabase"]["url"]
+    key = st.secrets["supabase"]["key"]
+    return create_client(url, key)
+
+supabase = get_supabase_client()
 
 def registrar_log(acao, detalhes):
     if 'user_id' in st.session_state:
-        conn = get_db_connection()
-        c = conn.cursor()
-        # Alterado para logsFat
-        c.execute("INSERT INTO logsFat (usuario_id, acao, detalhes) VALUES (%s, %s, %s)",
-                  (st.session_state['user_id'], acao, detalhes))
-        conn.commit()
-        conn.close()
+        try:
+            supabase.table("logsfat").insert({
+                "usuario_id": st.session_state['user_id'],
+                "acao": acao,
+                "detalhes": detalhes
+            }).execute()
+        except Exception as e:
+            pass # Evita travar o app se o log falhar
 
 def hash_senha(senha):
     return hashlib.sha256(senha.encode()).hexdigest()
@@ -75,12 +76,11 @@ def tela_login():
         user = st.text_input("Usuário", key="login_user")
         senha = st.text_input("Senha", type="password", key="login_pass")
         if st.button("Entrar"):
-            conn = get_db_connection()
-            c = conn.cursor()
-            c.execute("SELECT * FROM usuarios WHERE usuario=%s AND senha=%s", (user, hash_senha(senha)))
-            resultado = c.fetchone()
-            if resultado:
-                if resultado['aprovado'] == True:
+            res = supabase.table("usuarios").select("*").eq("usuario", user).eq("senha", hash_senha(senha)).execute()
+            
+            if res.data:
+                resultado = res.data[0]
+                if resultado['aprovado']:
                     st.session_state['logado'] = True
                     st.session_state['user_id'] = resultado['id']
                     st.session_state['cargo'] = resultado['cargo']
@@ -91,24 +91,21 @@ def tela_login():
                     st.error("Sua conta aguarda aprovação de um Administrador.")
             else:
                 st.error("Usuário ou senha incorretos.")
-            conn.close()
 
     with abas[1]:
         n_nome = st.text_input("Nome Completo")
         n_user = st.text_input("Novo Usuário")
         n_senha = st.text_input("Nova Senha", type="password")
         if st.button("Solicitar Cadastro"):
-            conn = get_db_connection()
-            c = conn.cursor()
             try:
-                c.execute("INSERT INTO usuarios (nome, usuario, senha) VALUES (%s, %s, %s)", 
-                          (n_nome, n_user, hash_senha(n_senha)))
-                conn.commit()
+                supabase.table("usuarios").insert({
+                    "nome": n_nome,
+                    "usuario": n_user,
+                    "senha": hash_senha(n_senha)
+                }).execute()
                 st.success("Cadastro solicitado com sucesso! Aguarde a aprovação.")
-            except psycopg2.IntegrityError:
-                st.error("Este nome de usuário já existe.")
-            finally:
-                conn.close()
+            except Exception as e:
+                st.error("Erro ao solicitar cadastro. Verifique se o usuário já existe.")
 
 def dashboard():
     st.header("📊 Dashboard de Faturamentos")
@@ -117,54 +114,51 @@ def dashboard():
     ultimo_domingo = hoje - timedelta(days=(hoje.weekday() + 1) % 7)
     proximo_domingo = ultimo_domingo + timedelta(days=7)
     
-    conn = get_db_connection()
-    c = conn.cursor()
-    
-    c.execute("""
-        SELECT status, SUM(valor) as total FROM faturamentos 
-        WHERE data_lancamento BETWEEN %s AND %s GROUP BY status
-    """, (ultimo_domingo.strftime("%Y-%m-%d"), proximo_domingo.strftime("%Y-%m-%d")))
-    
-    totais = {'FATURADO': 0, 'PENDENTE': 0, 'PAGO': 0}
-    for row in c.fetchall():
-        totais[row['status']] = float(row['total'])
+    # Buscar faturamentos do período
+    res = supabase.table("faturamentos")\
+        .select("id, cliente, valor, status, data_lancamento")\
+        .gte("data_lancamento", ultimo_domingo.strftime("%Y-%m-%d"))\
+        .lte("data_lancamento", proximo_domingo.strftime("%Y-%m-%d"))\
+        .execute()
         
+    totais = {'FATURADO': 0.0, 'PENDENTE': 0.0, 'PAGO': 0.0}
+    df_semana = pd.DataFrame(res.data)
+    
+    if not df_semana.empty:
+        for status_tipo in totais.keys():
+            totais[status_tipo] = float(df_semana[df_semana['status'] == status_tipo]['valor'].sum())
+            
     col1, col2, col3 = st.columns(3)
-    col1.metric("🟢 Faturado", f"R$ {totais.get('FATURADO', 0):.2f}")
-    col2.metric("🔴 Pendente", f"R$ {totais.get('PENDENTE', 0):.2f}")
-    col3.metric("🔵 Pago", f"R$ {totais.get('PAGO', 0):.2f}")
+    col1.metric("🟢 Faturado", f"R$ {totais['FATURADO']:.2f}")
+    col2.metric("🔴 Pendente", f"R$ {totais['PENDENTE']:.2f}")
+    col3.metric("🔵 Pago", f"R$ {totais['PAGO']:.2f}")
     
     st.divider()
     
     st.subheader("Faturamentos da Semana (Domingo a Domingo)")
-    c.execute("SELECT id, cliente, valor, status, data_lancamento FROM faturamentos WHERE data_lancamento BETWEEN %s AND %s", 
-              (ultimo_domingo.strftime("%Y-%m-%d"), proximo_domingo.strftime("%Y-%m-%d")))
-    rows_semana = c.fetchall()
     
     def colorir_status(val):
         cor = 'green' if val == 'FATURADO' else 'red' if val == 'PENDENTE' else 'blue'
         return f'color: {cor}; font-weight: bold'
     
-    if rows_semana:
-        df_semana = pd.DataFrame([dict(r) for r in rows_semana])
-        df_semana.columns = ['ID', 'Cliente', 'Valor', 'Status', 'Data']
-        st.dataframe(df_semana.style.map(colorir_status, subset=['Status']), use_container_width=True)
+    if not df_semana.empty:
+        df_display = df_semana[['id', 'cliente', 'valor', 'status', 'data_lancamento']].copy()
+        df_display.columns = ['ID', 'Cliente', 'Valor', 'Status', 'Data']
+        st.dataframe(df_display.style.map(colorir_status, subset=['Status']), use_container_width=True)
     else:
         st.info("Nenhum faturamento nesta semana.")
 
     st.divider()
     
     st.subheader("⚠️ Faturamentos Expirados / Não Pagos")
-    c.execute("SELECT cliente, valor, status, data_lancamento FROM faturamentos WHERE status != 'PAGO'")
-    rows_expirados = c.fetchall()
-    if rows_expirados:
-        df_expirados = pd.DataFrame([dict(r) for r in rows_expirados])
+    res_exp = supabase.table("faturamentos").select("cliente, valor, status, data_lancamento").neq("status", "PAGO").execute()
+    df_expirados = pd.DataFrame(res_exp.data)
+    
+    if not df_expirados.empty:
         df_expirados.columns = ['Cliente', 'Valor', 'Status', 'Data']
         st.dataframe(df_expirados.style.map(colorir_status, subset=['Status']), use_container_width=True)
     else:
         st.success("Tudo em dia! Nenhum faturamento pendente ou expirado.")
-    
-    conn.close()
 
 def lancar_novo():
     st.header("📝 Lançar Novo Faturamento")
@@ -178,10 +172,10 @@ def lancar_novo():
             df = pd.read_excel(arquivo)
             col_valor = [col for col in df.columns if col.upper() == 'VALOR']
             if col_valor:
-                valor_total = pd.to_numeric(df[col_valor[0]], errors='coerce').sum()
+                valor_total = float(pd.to_numeric(df[col_valor[0]], errors='coerce').sum())
                 st.success(f"Valor total calculado da planilha: R$ {valor_total:.2f}")
             else:
-                st.error("Coluna 'Valor' ou 'Valor' não encontrada na planilha.")
+                st.error("Coluna 'Valor' não encontrada na planilha.")
         except Exception as e:
             st.error(f"Erro ao ler a planilha: {e}")
 
@@ -189,64 +183,62 @@ def lancar_novo():
     botao_desabilitado = not concordo or arquivo is None or valor_total == 0.0
     
     if st.button("Lançar Faturamento", disabled=botao_desabilitado):
-        blob_arquivo = arquivo.getvalue()
-        conn = get_db_connection()
-        c = conn.cursor()
+        # Converte os bytes do arquivo para uma String Hexadecimal compatível com o tipo BYTEA via API REST
+        blob_hex = f"\\x{arquivo.getvalue().hex()}"
         data_hoje = datetime.today().strftime("%Y-%m-%d")
         
-        c.execute("""INSERT INTO faturamentos (cliente, valor, arquivo_nome, arquivo_blob, status, data_lancamento, lancado_por)
-                     VALUES (%s, %s, %s, %s, 'PENDENTE', %s, %s)""", 
-                  (cliente, valor_total, arquivo.name, psycopg2.Binary(blob_arquivo), data_hoje, st.session_state['user_id']))
-        conn.commit()
-        conn.close()
-        registrar_log("INSERÇÃO", f"Faturamento de R$ {valor_total} lançado para {cliente}.")
-        st.success("Faturamento lançado com sucesso com status PENDENTE!")
+        try:
+            supabase.table("faturamentos").insert({
+                "cliente": cliente,
+                "valor": valor_total,
+                "arquivo_nome": arquivo.name,
+                "arquivo_blob": blob_hex,
+                "status": "PENDENTE",
+                "data_lancamento": data_hoje,
+                "lancado_por": st.session_state['user_id']
+            }).execute()
+            
+            registrar_log("INSERÇÃO", f"Faturamento de R$ {valor_total} lançado para {cliente}.")
+            st.success("Faturamento lançado com sucesso com status PENDENTE!")
+        except Exception as e:
+            st.error(f"Erro ao salvar no banco de dados: {e}")
 
 def pesquisar_faturamento():
     st.header("🔍 Pesquisar Faturamento")
-    col1, col2 = st.columns(2)
-    busca_cliente = col1.text_input("Buscar por Cliente")
+    busca_cliente = st.text_input("Buscar por Cliente")
     
-    conn = get_db_connection()
-    c = conn.cursor()
-    
-    query = """
-        SELECT f.id, f.cliente, f.valor, f.status, f.data_lancamento, f.arquivo_nome, u.nome as usuario 
-        FROM faturamentos f 
-        JOIN usuarios u ON f.lancado_por = u.id 
-        WHERE 1=1
-    """
-    params = []
+    query = supabase.table("faturamentos").select("*, usuarios(nome)")
     if busca_cliente:
-        query += " AND f.cliente ILIKE %s"
-        params.append(f"%{busca_cliente}%")
+        query = query.ilike("cliente", f"%{busca_cliente}%")
         
-    c.execute(query, params)
-    rows = c.fetchall()
+    res = query.execute()
+    rows = res.data
     
     if rows:
         for row in rows:
+            nome_usuario = row['usuarios']['nome'] if row.get('usuarios') else "Desconhecido"
             with st.expander(f"{row['cliente']} - R$ {row['valor']} ({row['data_lancamento']})"):
-                st.write(f"**Lançado por:** {row['usuario']}")
+                st.write(f"**Lançado por:** {nome_usuario}")
                 st.write(f"**Arquivo original:** {row['arquivo_nome']}")
                 
-                c_blob = conn.cursor()
-                c_blob.execute("SELECT arquivo_blob FROM faturamentos WHERE id = %s", (row['id'],))
-                blob_row = c_blob.fetchone()
-                
-                if blob_row and blob_row['arquivo_blob']:
-                    bytes_arquivo = bytes(blob_row['arquivo_blob'])
-                    st.download_button(label="📥 Fazer Download da Planilha", data=bytes_arquivo, file_name=row['arquivo_nome'], key=f"dl_{row['id']}")
+                # Resgatar e converter o campo Hexadecimal de volta para Bytes para Download
+                if row.get('arquivo_blob'):
+                    try:
+                        hex_str = row['arquivo_blob']
+                        if hex_str.startswith('\\x'):
+                            hex_str = hex_str[2:]
+                        bytes_arquivo = bytes.fromhex(hex_str)
+                        st.download_button(label="📥 Fazer Download da Planilha", data=bytes_arquivo, file_name=row['arquivo_nome'], key=f"dl_{row['id']}")
+                    except:
+                        st.caption("Não foi possível processar o arquivo anexo.")
                 
                 novo_status = st.selectbox("Alterar Status", ['PENDENTE', 'FATURADO', 'PAGO'], index=['PENDENTE', 'FATURADO', 'PAGO'].index(row['status']), key=f"st_{row['id']}")
                 
                 c1, c2 = st.columns(2)
                 if c1.button("Salvar Alteração", key=f"sv_{row['id']}"):
-                    c_up = conn.cursor()
-                    c_up.execute("UPDATE faturamentos SET status = %s WHERE id = %s", (novo_status, row['id']))
-                    conn.commit()
+                    supabase.table("faturamentos").update({"status": novo_status}).eq("id", row['id']).execute()
                     registrar_log("ALTERAÇÃO", f"Status do faturamento ID {row['id']} alterado para {novo_status}")
-                    st.success("Status updated!")
+                    st.success("Status atualizado!")
                     st.rerun()
                     
                 if c2.button("Excluir Faturamento", type="primary", key=f"del_{row['id']}"):
@@ -255,16 +247,13 @@ def pesquisar_faturamento():
                 if st.session_state.get(f"confirm_del_{row['id']}", False):
                     st.warning("⚠️ Tem certeza absoluta que deseja excluir este faturamento?")
                     if st.button("Sim, Confirmar Exclusão", key=f"conf_yes_{row['id']}"):
-                        c_del = conn.cursor()
-                        c_del.execute("DELETE FROM faturamentos WHERE id = %s", (row['id'],))
-                        conn.commit()
+                        supabase.table("faturamentos").delete().eq("id", row['id']).execute()
                         registrar_log("EXCLUSÃO", f"Faturamento ID {row['id']} excluído do sistema.")
                         st.success("Removido com sucesso!")
                         st.session_state[f"confirm_del_{row['id']}"] = False
                         st.rerun()
     else:
         st.write("Nenhum registro encontrado.")
-    conn.close()
 
 def relatorios():
     st.header("📄 Relatórios Gerenciais")
@@ -286,20 +275,24 @@ def relatorios():
     data_fim = st.date_input("Data Final")
     
     if st.button("Gerar Relatório em PDF"):
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("""
-            SELECT f.data_lancamento, f.cliente, f.valor, u.nome as nome_usuario 
-            FROM faturamentos f 
-            JOIN usuarios u ON f.lancado_por = u.id 
-            WHERE f.status = %s AND f.data_lancamento BETWEEN %s AND %s
-        """, (status_selecionado, data_inicio.strftime("%Y-%m-%d"), data_fim.strftime("%Y-%m-%d")))
-        
-        dados = c.fetchall()
-        conn.close()
-        
-        if dados:
-            pdf_bytes = gerar_pdf(dados, tipo_relatorio)
+        res = supabase.table("faturamentos")\
+            .select("data_lancamento, cliente, valor, usuarios(nome)")\
+            .eq("status", status_selecionado)\
+            .gte("data_lancamento", data_inicio.strftime("%Y-%m-%d"))\
+            .lte("data_lancamento", data_fim.strftime("%Y-%m-%d"))\
+            .execute()
+            
+        if res.data:
+            dados_formatados = []
+            for row in res.data:
+                dados_formatados.append({
+                    'data_lancamento': row['data_lancamento'],
+                    'cliente': row['cliente'],
+                    'valor': float(row['valor']),
+                    'nome_usuario': row['usuarios']['nome'] if row.get('usuarios') else "Desconhecido"
+                })
+                
+            pdf_bytes = gerar_pdf(dados_formatados, tipo_relatorio)
             st.success("PDF gerado com sucesso!")
             st.download_button(label="📥 Baixar Relatório em PDF", data=pdf_bytes, file_name=f"relatorio_{status_selecionado}.pdf", mime='application/pdf')
         else:
@@ -308,24 +301,19 @@ def relatorios():
 def log_interno():
     st.header("🔐 Painel de Controle Técnico e Auditoria (MASTER)")
     if st.session_state.get('cargo') != 'MASTER':
-        st.error("Acesso estritamente Negado. Apenas usuários com nível MASTER podem visualizar.")
+        st.error("Acesso estritamente Negado.")
         return
     
-    conn = get_db_connection()
-    c = conn.cursor()
-    
     st.subheader("Aprovações de Contas Pendentes")
-    c.execute("SELECT id, nome, usuario, cargo FROM usuarios WHERE aprovado = FALSE")
-    pendentes = c.fetchall()
+    res_pendentes = supabase.table("usuarios").select("id, nome, usuario, cargo").eq("aprovado", False).execute()
+    pendentes = res_pendentes.data
     
     if pendentes:
         for p in pendentes:
             c1, c2 = st.columns([3, 1])
             c1.write(f"Solicitante: **{p['nome']}** | Usuário: `{p['usuario']}`")
             if c2.button("Liberar Acesso", key=f"apr_{p['id']}"):
-                c_up = conn.cursor()
-                c_up.execute("UPDATE usuarios SET aprovado = TRUE WHERE id = %s", (p['id'],))
-                conn.commit()
+                supabase.table("usuarios").update({"aprovado": True}).eq("id", p['id']).execute()
                 registrar_log("ALTERAÇÃO", f"O Administrador aprovou o acesso do usuário ID {p['id']}.")
                 st.success("Usuário Liberado!")
                 st.rerun()
@@ -335,21 +323,21 @@ def log_interno():
     st.divider()
     
     st.subheader("Histórico Completo de Auditoria (Últimas 100 ações)")
-    # Query alterada de logs para logsFat
-    c.execute("""
-        SELECT l.data_hora, u.nome, l.acao, l.detalhes 
-        FROM logsFat l 
-        JOIN usuarios u ON l.usuario_id = u.id 
-        ORDER BY l.data_hora DESC LIMIT 100
-    """)
-    rows_logs = c.fetchall()
-    if rows_logs:
-        df_logs = pd.DataFrame([dict(r) for r in rows_logs])
-        df_logs.columns = ['Data e Hora', 'Usuário', 'Ação Efetuada', 'Detalhes da Operação']
+    res_logs = supabase.table("logsfat").select("data_hora, acao, detalhes, usuarios(nome)").order("data_hora", desc=True).limit(100).execute()
+    
+    if res_logs.data:
+        logs_formatados = []
+        for l in res_logs.data:
+            logs_formatados.append({
+                'Data e Hora': l['data_hora'],
+                'Usuário': l['usuarios']['nome'] if l.get('usuarios') else "Desconhecido",
+                'Ação Efetuada': l['acao'],
+                'Detalhes da Operação': l['detalhes']
+            })
+        df_logs = pd.DataFrame(logs_formatados)
         st.dataframe(df_logs, use_container_width=True)
     else:
         st.write("Sem logs registrados até o momento.")
-    conn.close()
 
 # ==========================================
 # ROTEAMENTO DA SESSÃO PRINCIPAL
