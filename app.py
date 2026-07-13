@@ -16,163 +16,175 @@ st.set_page_config(page_title="Controle de Faturamento", layout="wide")
 # ==========================================
 # FUNÇÃO PARA EXIBIR INTRO COM LOADING
 # ==========================================
-def mostrar_intro():
-    """Exibe tela de intro com logo e loading de bolinhas que esvaecem"""
+def exibir_intro():
+    """Exibe a intro com loading enquanto a página carrega"""
+    
+    # Cria um placeholder para a intro
+    intro_placeholder = st.empty()
     
     # CSS para centralizar e estilizar a intro
-    st.markdown("""
+    intro_html = """
         <style>
             .intro-container {
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
                 position: fixed;
                 top: 0;
                 left: 0;
                 right: 0;
                 bottom: 0;
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                align-items: center;
-                background-color: white;
                 z-index: 9999;
                 transition: opacity 0.8s ease-in-out;
             }
-            .intro-container.hidden {
+            .intro-container.fade-out {
                 opacity: 0;
                 pointer-events: none;
             }
-            .intro-container.removed {
-                display: none !important;
+            .logo-container {
+                animation: float 2s ease-in-out infinite;
             }
             .logo-image {
                 max-width: 400px;
                 width: 80%;
-                margin-bottom: 40px;
-                animation: pulse 1.5s ease-in-out infinite;
+                margin-bottom: 30px;
             }
-            @keyframes pulse {
-                0% { transform: scale(1); }
-                50% { transform: scale(1.05); }
-                100% { transform: scale(1); }
+            @keyframes float {
+                0% { transform: translateY(0px); }
+                50% { transform: translateY(-10px); }
+                100% { transform: translateY(0px); }
             }
-            .loader {
+            .loader-container {
                 display: flex;
-                gap: 12px;
-                margin-top: 20px;
+                flex-direction: column;
+                align-items: center;
+                gap: 20px;
+            }
+            .dots {
+                display: flex;
+                gap: 15px;
             }
             .dot {
-                width: 16px;
-                height: 16px;
-                background-color: #4CAF50;
+                width: 20px;
+                height: 20px;
+                background: #4CAF50;
                 border-radius: 50%;
-                animation: fade-dot 1.5s ease-in-out infinite;
+                animation: bounce 1.2s ease-in-out infinite;
             }
             .dot:nth-child(1) { animation-delay: 0s; }
-            .dot:nth-child(2) { animation-delay: 0.3s; }
-            .dot:nth-child(3) { animation-delay: 0.6s; }
-            .dot:nth-child(4) { animation-delay: 0.9s; }
-            .dot:nth-child(5) { animation-delay: 1.2s; }
+            .dot:nth-child(2) { animation-delay: 0.2s; }
+            .dot:nth-child(3) { animation-delay: 0.4s; }
+            .dot:nth-child(4) { animation-delay: 0.6s; }
+            .dot:nth-child(5) { animation-delay: 0.8s; }
             
-            @keyframes fade-dot {
+            @keyframes bounce {
                 0%, 100% { 
-                    opacity: 1;
-                    transform: scale(1);
+                    transform: scale(0.5);
+                    opacity: 0.3;
                 }
                 50% { 
-                    opacity: 0.1;
-                    transform: scale(0.3);
+                    transform: scale(1);
+                    opacity: 1;
                 }
             }
             .loading-text {
-                margin-top: 15px;
                 font-family: Arial, sans-serif;
-                color: #666;
+                color: #333;
+                font-size: 16px;
+                font-weight: 300;
+                letter-spacing: 4px;
+                margin-top: 10px;
+            }
+            .loading-percent {
+                font-family: Arial, sans-serif;
+                color: #4CAF50;
                 font-size: 14px;
-                letter-spacing: 2px;
+                font-weight: bold;
+                margin-top: 5px;
             }
         </style>
-    """, unsafe_allow_html=True)
+        
+        <div id="intro-container" class="intro-container">
+            <div class="logo-container">
+                <img src="data:image/png;base64,{logo}" class="logo-image" alt="Logo">
+            </div>
+            <div class="loader-container">
+                <div class="dots">
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                </div>
+                <div class="loading-text">CARREGANDO</div>
+                <div class="loading-percent" id="percent">0%</div>
+            </div>
+        </div>
+        
+        <script>
+            // Simula o progresso de carregamento
+            var percent = 0;
+            var interval = setInterval(function() {
+                percent += Math.floor(Math.random() * 10) + 1;
+                if (percent > 100) percent = 100;
+                document.getElementById('percent').textContent = percent + '%';
+                if (percent >= 100) {
+                    clearInterval(interval);
+                }
+            }, 300);
+            
+            // Aguarda o carregamento completo e remove a intro
+            window.addEventListener('load', function() {
+                setTimeout(function() {
+                    var container = document.getElementById('intro-container');
+                    if (container) {
+                        container.classList.add('fade-out');
+                        setTimeout(function() {
+                            if (container) {
+                                container.style.display = 'none';
+                            }
+                        }, 800);
+                    }
+                }, 1000);
+            });
+        </script>
+    """
     
     # Obtém a logo em base64
     logo_base64 = get_logo_base64()
     
-    # Container da intro
-    intro_html = f"""
-        <div id="intro-container" class="intro-container">
-            <img src="data:image/png;base64,{logo_base64}" class="logo-image" alt="Logo">
-            <div class="loader">
-                <div class="dot"></div>
-                <div class="dot"></div>
-                <div class="dot"></div>
-                <div class="dot"></div>
-                <div class="dot"></div>
-            </div>
-            <div class="loading-text">CARREGANDO...</div>
-        </div>
-        
-        <script>
-            // Função para esconder a intro após 5 segundos
-            setTimeout(function() {{
-                var container = document.getElementById('intro-container');
-                if (container) {{
-                    // Adiciona classe para fade-out
-                    container.classList.add('hidden');
-                    
-                    // Remove completamente do DOM após a animação
-                    setTimeout(function() {{
-                        if (container) {{
-                            container.classList.add('removed');
-                        }}
-                    }}, 800);
-                }}
-            }}, 5000);
-        </script>
-    """
+    # Renderiza a intro com a logo
+    intro_placeholder.markdown(intro_html.format(logo=logo_base64), unsafe_allow_html=True)
     
-    # Usa um placeholder para exibir a intro
-    placeholder = st.empty()
-    placeholder.markdown(intro_html, unsafe_allow_html=True)
+    # Simula o carregamento dos recursos
+    # Aqui você pode colocar qualquer inicialização pesada
+    time.sleep(2)  # Simula carregamento
     
-    # Aguarda 5 segundos (a intro some pelo JavaScript)
-    time.sleep(5.5)
+    # Após o carregamento, limpa o placeholder e mostra o conteúdo
+    intro_placeholder.empty()
     
-    # Limpa o placeholder para garantir que a intro desapareceu
-    placeholder.empty()
-    
-    # Força um rerun para atualizar a interface
-    st.rerun()
+    return intro_placeholder
 
 def get_logo_base64():
-    """Obtém a logo do repositório GitHub em base64"""
+    """Obtém a logo em base64"""
     try:
         # Tenta carregar do arquivo local
         with open("logoMult.png", "rb") as img_file:
             return base64.b64encode(img_file.read()).decode()
     except:
-        # Se não encontrar, tenta carregar do GitHub
-        try:
-            import requests
-            # Substitua pelo seu usuário e repositório
-            url = "https://raw.githubusercontent.com/seu-usuario/seu-repositorio/main/logoMult.png"
-            response = requests.get(url, timeout=5)
-            if response.status_code == 200:
-                return base64.b64encode(response.content).decode()
-        except:
-            pass
-        # Fallback: retorna uma imagem placeholder simples com texto
+        # Fallback: imagem placeholder
         return "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
 # ==========================================
-# INICIALIZAÇÃO DO ESTADO DA INTRO
+# INICIALIZAÇÃO - EXIBE INTRO ENQUANTO CARREGA
 # ==========================================
-if 'intro_mostrada' not in st.session_state:
-    st.session_state['intro_mostrada'] = False
-
-# ==========================================
-# EXIBE A INTRO (APENAS NA PRIMEIRA CARGA)
-# ==========================================
-if not st.session_state['intro_mostrada']:
-    mostrar_intro()
-    st.session_state['intro_mostrada'] = True
+if 'intro_exibida' not in st.session_state:
+    # Exibe a intro
+    exibir_intro()
+    st.session_state['intro_exibida'] = True
 
 # ==========================================
 # CONFIGURAÇÃO GLOBAL DE CLIENTES DO SISTEMA
