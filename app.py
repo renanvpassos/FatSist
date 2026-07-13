@@ -368,8 +368,8 @@ def relatorios():
     }
     status_selecionado = mapa_status[tipo_relatorio]
     
-    data_inicio = st.date_input("Data Inicial")
-    data_fim = st.date_input("Data Final")
+    data_inicio = st.date_input("Data Inicial", format="DD/MM/YYYY")
+    data_fim = st.date_input("Data Final", format="DD/MM/YYYY")
     
     if st.button("Gerar Relatório em PDF"):
         res = supabase.table("faturamentos")\
