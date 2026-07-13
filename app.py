@@ -105,7 +105,7 @@ def gerar_pdf(dados, titulo):
         pdf.cell(50, 10, str(row['nome_usuario']), border=1)
         pdf.ln()
         
-    return pdf.output(dest='S').encode('latin1')
+    return bytes(pdf.output())
 
 # ==========================================
 # TELAS DO SISTEMA
