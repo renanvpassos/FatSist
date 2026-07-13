@@ -10,6 +10,11 @@ import io
 st.set_page_config(page_title="Controle de Faturamento", layout="wide")
 
 # ==========================================
+# CONFIGURAÇÃO GLOBAL DE CLIENTES DO SISTEMA
+# ==========================================
+LISTA_CLIENTES = ["AWS", "ZFGROUP"]
+
+# ==========================================
 # CONFIGURAÇÃO DO BANCO DE DADOS (SUPABASE API)
 # ==========================================
 @st.cache_resource
@@ -105,7 +110,7 @@ def tela_login():
                 }).execute()
                 st.success("Cadastro solicitado com sucesso! Aguarde a aprovação.")
             except Exception as e:
-                st.error("Erro ao solicitar cadastro. Verifique se o usuário já existe.")
+                st.error(f"Erro real do Supabase: {e}")
 
 def dashboard():
     st.header("📊 Dashboard de Faturamentos")
@@ -114,7 +119,7 @@ def dashboard():
     ultimo_domingo = hoje - timedelta(days=(hoje.weekday() + 1) % 7)
     proximo_domingo = ultimo_domingo + timedelta(days=7)
     
-    # Buscar faturamentos do período
+    # Buscar faturamentos reais do período
     res = supabase.table("faturamentos")\
         .select("id, cliente, valor, status, data_lancamento")\
         .gte("data_lancamento", ultimo_domingo.strftime("%Y-%m-%d"))\
@@ -124,6 +129,40 @@ def dashboard():
     totais = {'FATURADO': 0.0, 'PENDENTE': 0.0, 'PAGO': 0.0}
     df_semana = pd.DataFrame(res.data)
     
+    # --- INTEGRAÇÃO DA REGRA DE NEGÓCIO (CLIENTES PENDENTES NA DATA) ---
+    linhas_extras = []
+    if not df_semana.empty:
+        df_semana['data_lancamento'] = df_semana['data_lancamento'].astype(str)
+        datas_com_lancamento = df_semana['data_lancamento'].unique()
+        
+        # Para cada data que possui movimentação, garante que os outros clientes apareçam como PENDENTE
+        for data_v in datas_com_lancamento:
+            clientes_na_data = df_semana[df_semana['data_lancamento'] == data_v]['cliente'].unique()
+            for cli in LISTA_CLIENTES:
+                if cli not in clientes_na_data:
+                    linhas_extras.append({
+                        "id": "-",
+                        "cliente": cli,
+                        "valor": 0.0,
+                        "status": "PENDENTE",
+                        "data_lancamento": data_v
+                    })
+        if linhas_extras:
+            df_semana = pd.concat([df_semana, pd.DataFrame(linhas_extras)], ignore_index=True)
+    else:
+        # Se não há nenhum arquivo lançado na semana inteira, mostra a data de hoje como PENDENTE para todos
+        data_hoje_str = hoje.strftime("%Y-%m-%d")
+        for cli in LISTA_CLIENTES:
+            linhas_extras.append({
+                "id": "-",
+                "cliente": cli,
+                "valor": 0.0,
+                "status": "PENDENTE",
+                "data_lancamento": data_hoje_str
+            })
+        df_semana = pd.DataFrame(linhas_extras)
+    # -------------------------------------------------------------------
+        
     if not df_semana.empty:
         for status_tipo in totais.keys():
             totais[status_tipo] = float(df_semana[df_semana['status'] == status_tipo]['valor'].sum())
@@ -163,7 +202,7 @@ def dashboard():
 def lancar_novo():
     st.header("📝 Lançar Novo Faturamento")
     
-    cliente = st.selectbox("Selecione o Cliente", ["AWS", "ZFGROUP"])
+    cliente = st.selectbox("Selecione o Cliente", LISTA_CLIENTES)
     arquivo = st.file_uploader("Anexar Planilha de Faturamento (Excel)", type=['xlsx', 'xls'])
     
     valor_total = 0.0
@@ -172,15 +211,10 @@ def lancar_novo():
             df = pd.read_excel(arquivo)
             col_valor = [col for col in df.columns if col.upper() == 'VALOR']
             if col_valor:
-                # 1. Converte a coluna para números
                 valores_coluna = pd.to_numeric(df[col_valor[0]], errors='coerce')
-                
-                # 2. Ignora a última linha preenchida e soma
                 valor_total = float(valores_coluna.iloc[:-1].sum())
                 
-                # 3. Formatação padrão BRL (Substitui vírgula americana por ponto e ponto por vírgula)
                 valor_brl = f"R$ {valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                
                 st.success(f"Valor total calculado da planilha (última linha ignorada): {valor_brl}")
             else:
                 st.error("Coluna 'Valor' não encontrada na planilha.")
@@ -191,7 +225,6 @@ def lancar_novo():
     botao_desabilitado = not concordo or arquivo is None or valor_total == 0.0
     
     if st.button("Lançar Faturamento", disabled=botao_desabilitado):
-        # Converte os bytes do arquivo para uma String Hexadecimal
         blob_hex = f"\\x{arquivo.getvalue().hex()}"
         data_hoje = datetime.today().strftime("%Y-%m-%d")
         
@@ -201,16 +234,15 @@ def lancar_novo():
                 "valor": valor_total,
                 "arquivo_nome": arquivo.name,
                 "arquivo_blob": blob_hex,
-                "status": "PENDENTE",
+                "status": "FATURADO",  # Alterado automaticamente para FATURADO ao lançar
                 "data_lancamento": data_hoje,
                 "lancado_por": st.session_state['user_id']
             }).execute()
             
-            # Formata também para salvar um texto bonito no log de auditoria
             valor_brl_log = f"R$ {valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            registrar_log("INSERÇÃO", f"Faturamento de {valor_brl_log} lançado para {cliente}.")
+            registrar_log("INSERÇÃO", f"Faturamento de {valor_brl_log} lançado para {cliente} com status FATURADO.")
             
-            st.success("Faturamento lançado com sucesso com status PENDENTE!")
+            st.success("Faturamento lançado com sucesso com status FATURADO!")
         except Exception as e:
             st.error(f"Erro ao salvar no banco de dados: {e}")
 
@@ -232,7 +264,6 @@ def pesquisar_faturamento():
                 st.write(f"**Lançado por:** {nome_usuario}")
                 st.write(f"**Arquivo original:** {row['arquivo_nome']}")
                 
-                # Resgatar e converter o campo Hexadecimal de volta para Bytes para Download
                 if row.get('arquivo_blob'):
                     try:
                         hex_str = row['arquivo_blob']
@@ -261,7 +292,7 @@ def pesquisar_faturamento():
                         supabase.table("faturamentos").delete().eq("id", row['id']).execute()
                         registrar_log("EXCLUSÃO", f"Faturamento ID {row['id']} excluído do sistema.")
                         st.success("Removido com sucesso!")
-                        st.session_state[f"confirm_del_{row['id']}"] = False
+                        st.session_state[f"confirm_del_{row['id']}", False]
                         st.rerun()
     else:
         st.write("Nenhum registro encontrado.")
