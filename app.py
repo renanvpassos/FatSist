@@ -521,7 +521,7 @@ def pesquisar_faturamento():
                         hex_str = row['arquivo_blob'].replace('\\x', '')
                         bytes_zip = bytes.fromhex(hex_str)
                         
-                        # 2. Oferecer download do ZIP completo (sempre funciona)
+                        # 2. Oferecer download do ZIP completo
                         st.download_button(
                             label="📥 Baixar todos os arquivos (ZIP)", 
                             data=bytes_zip, 
@@ -530,21 +530,29 @@ def pesquisar_faturamento():
                         )
                         
                         # 3. Listar e baixar arquivos individuais
-                        st.write("---")
-                        st.write("ou baixe individualmente:")
-                        
                         with zipfile.ZipFile(io.BytesIO(bytes_zip)) as z:
                             lista_arquivos = z.namelist()
-                            for nome_arquivo in lista_arquivos:
-                                # Extrair o conteúdo do arquivo específico dentro do ZIP
-                                conteudo_arquivo = z.read(nome_arquivo)
-                                
-                                st.download_button(
-                                    label=f"📄 {nome_arquivo}",
-                                    data=conteudo_arquivo,
-                                    file_name=nome_arquivo,
-                                    key=f"dl_{row['id']}_{nome_arquivo}" # Key única por ID e por nome
-                                )
+                            
+                        # LÓGICA ALTERADA: Só mostra os individuais se houver MAIS de 1 arquivo
+                        if len(lista_arquivos) > 1:
+                            st.write("---")
+                            st.write("ou baixe individualmente:")
+                            
+                            with zipfile.ZipFile(io.BytesIO(bytes_zip)) as z:
+                                for nome_arquivo in lista_arquivos:
+                                    conteudo_arquivo = z.read(nome_arquivo)
+                                    
+                                    st.download_button(
+                                        label=f"📄 {nome_arquivo}",
+                                        data=conteudo_arquivo,
+                                        file_name=nome_arquivo,
+                                        key=f"dl_{row['id']}_{nome_arquivo}"
+                                    )
+                        else:
+                            # Se for apenas 1 arquivo, você pode optar por exibir um botão direto 
+                            # ou apenas deixar o download do ZIP que já resolve.
+                            nome_unico = lista_arquivos[0]
+                            st.info(f"Este faturamento contém apenas um arquivo: **{nome_unico}**")
                     
                     novo_status = st.selectbox("Alterar Status", ['PENDENTE', 'FATURADO', 'PAGO'], index=['PENDENTE', 'FATURADO', 'PAGO'].index(row['status']), key=f"st_{row['id']}")
                     
