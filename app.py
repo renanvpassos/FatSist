@@ -385,12 +385,12 @@ def dashboard():
                 totais[status_tipo] = float(df_semana[df_semana['status'] == status_tipo]['valor'].sum())
             
     col1, col2, col3 = st.columns(3)
-    col1.metric("🟢 Faturado", formatar_brl(totais['FATURADO']))
+    col1.metric("🟢 Faturado (Aguardando Pagamento)", formatar_brl(totais['FATURADO']))
     
     # Exibe como número inteiro (quantidade)
-    col2.metric("🔴 Pendente", int(totais['PENDENTE'])) 
+    col2.metric("🔴 Pendente (Quantidade)", int(totais['PENDENTE'])) 
     
-    col3.metric("🔵 Pago", formatar_brl(totais['PAGO']))
+    col3.metric("🔵 Pago (Pagamento Efetuado)", formatar_brl(totais['PAGO']))
     
     st.divider()
     
