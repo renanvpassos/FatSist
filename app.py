@@ -516,17 +516,16 @@ def pesquisar_faturamento():
                     st.write(f"**Lançado por:** {nome_usuario}")
                     
                     if row.get('arquivo_blob'):
-                        # 1. Recuperar os bytes do arquivo
                         hex_str = row['arquivo_blob'].replace('\\x', '')
                         bytes_arquivo = bytes.fromhex(hex_str)
                         
-                        # 2. Verificar quantos arquivos existem dentro do pacote
-                        with zipfile.ZipFile(io.BytesIO(bytes_arquivo)) as z:
-                            lista_arquivos = z.namelist()
+                        # Verifica quantos arquivos foram anexados originalmente pelo nome
+                        nomes = row.get('arquivo_nome', "")
+                        # Conta quantos arquivos existem pela contagem de vírgulas (se houver)
+                        num_arquivos = len(nomes.split(',')) if nomes else 1
                         
-                        # 3. Lógica de Download Inteligente
-                        if len(lista_arquivos) == 1:
-                            # Se for apenas 1, oferece como Excel (sem opção de ZIP)
+                        if num_arquivos == 1:
+                            # Apenas 1 arquivo: Baixar como Excel direto
                             st.download_button(
                                 label="📥 Baixar Arquivo (Excel)", 
                                 data=bytes_arquivo, 
@@ -535,16 +534,16 @@ def pesquisar_faturamento():
                                 key=f"dl_excel_{row['id']}"
                             )
                         else:
-                            # Se houver mais de um, oferece como ZIP
+                            # Múltiplos arquivos: Baixar como ZIP
                             st.download_button(
-                                label="📥 Baixar Arquivos (ZIP)", 
+                                label="📥 Baixar arquivos (ZIP)", 
                                 data=bytes_arquivo, 
                                 file_name=f"faturamento_{row['id']}.zip", 
                                 mime="application/zip",
                                 key=f"dl_zip_{row['id']}"
                             )
                     
-                    # 4. Alteração de Status
+                    # Alteração de Status
                     novo_status = st.selectbox("Alterar Status", ['PENDENTE', 'FATURADO', 'PAGO'], 
                                              index=['PENDENTE', 'FATURADO', 'PAGO'].index(row['status']), 
                                              key=f"st_{row['id']}")
@@ -556,7 +555,7 @@ def pesquisar_faturamento():
                         st.success("Status atualizado!")
                         st.rerun()
                         
-                    # 5. Exclusão
+                    # Exclusão
                     if c2.button("Excluir Faturamento", type="primary", key=f"del_{row['id']}"):
                         st.session_state[f"confirm_del_{row['id']}"] = True
                     
