@@ -5,9 +5,147 @@ from datetime import datetime, timedelta
 import hashlib
 from fpdf import FPDF
 import io
+import time
+import base64
 
-# Configuração da Página
+# ==========================================
+# FUNÇÃO PARA EXIBIR INTRO COM LOADING
+# ==========================================
+def mostrar_intro():
+    """Exibe tela de intro com logo e loading de bolinhas que esvaecem"""
+    
+    # CSS para centralizar e estilizar a intro
+    st.markdown("""
+        <style>
+            .intro-container {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                background-color: white;
+                z-index: 9999;
+                transition: opacity 1s ease-in-out;
+            }
+            .intro-container.fade-out {
+                opacity: 0;
+                pointer-events: none;
+            }
+            .logo-image {
+                max-width: 400px;
+                width: 80%;
+                margin-bottom: 40px;
+                animation: pulse 1.5s ease-in-out infinite;
+            }
+            @keyframes pulse {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.05); }
+                100% { transform: scale(1); }
+            }
+            .loader {
+                display: flex;
+                gap: 12px;
+                margin-top: 20px;
+            }
+            .dot {
+                width: 16px;
+                height: 16px;
+                background-color: #4CAF50;
+                border-radius: 50%;
+                animation: fade-dot 1.5s ease-in-out infinite;
+            }
+            .dot:nth-child(1) { animation-delay: 0s; }
+            .dot:nth-child(2) { animation-delay: 0.3s; }
+            .dot:nth-child(3) { animation-delay: 0.6s; }
+            .dot:nth-child(4) { animation-delay: 0.9s; }
+            .dot:nth-child(5) { animation-delay: 1.2s; }
+            
+            @keyframes fade-dot {
+                0%, 100% { 
+                    opacity: 1;
+                    transform: scale(1);
+                }
+                50% { 
+                    opacity: 0.1;
+                    transform: scale(0.3);
+                }
+            }
+            .loading-text {
+                margin-top: 15px;
+                font-family: Arial, sans-serif;
+                color: #666;
+                font-size: 14px;
+                letter-spacing: 2px;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    # Container da intro com a logo
+    intro_html = f"""
+        <div id="intro-container" class="intro-container">
+            <img src="data:image/png;base64,{get_logo_base64()}" class="logo-image" alt="Logo">
+            <div class="loader">
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+            </div>
+            <div class="loading-text">CARREGANDO...</div>
+        </div>
+    """
+    
+    st.markdown(intro_html, unsafe_allow_html=True)
+    
+    # Aguarda 5 segundos
+    time.sleep(5)
+    
+    # Adiciona classe fade-out para esvanecer
+    st.markdown("""
+        <script>
+            setTimeout(function() {
+                document.getElementById('intro-container').classList.add('fade-out');
+            }, 100);
+        </script>
+    """, unsafe_allow_html=True)
+    
+    # Pequena pausa para o fade-out
+    time.sleep(1)
+
+def get_logo_base64():
+    """Obtém a logo do repositório GitHub em base64"""
+    try:
+        # Tenta carregar do arquivo local
+        with open("logoMult.png", "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode()
+    except:
+        # Se não encontrar, tenta carregar do GitHub
+        try:
+            import requests
+            url = "https://raw.githubusercontent.com/seu-usuario/seu-repositorio/main/logoMult.png"
+            response = requests.get(url)
+            if response.status_code == 200:
+                return base64.b64encode(response.content).decode()
+        except:
+            pass
+        # Fallback: retorna uma imagem placeholder simples (texto)
+        return "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
+# ==========================================
+# CONFIGURAÇÃO DA PÁGINA
+# ==========================================
 st.set_page_config(page_title="Controle de Faturamento", layout="wide")
+
+# ==========================================
+# EXIBE A INTRO (APENAS NA PRIMEIRA CARGA)
+# ==========================================
+if 'intro_mostrada' not in st.session_state:
+    mostrar_intro()
+    st.session_state['intro_mostrada'] = True
 
 # ==========================================
 # CONFIGURAÇÃO GLOBAL DE CLIENTES DO SISTEMA
@@ -247,14 +385,11 @@ def dashboard():
         return f'color: {cor}; font-weight: bold'
     
     if not df_semana.empty:
-        # Alteração: Removido 'id' da seleção de colunas
         df_display = df_semana[['cliente', 'valor', 'status', 'data_lancamento']].copy()
         df_display['valor'] = df_display['valor'].apply(formatar_brl)
         df_display['data_lancamento'] = df_display['data_lancamento'].apply(formatar_data)
-        # Alteração: Removido 'ID' do nome das colunas
         df_display.columns = ['Cliente', 'Valor', 'Status', 'Data']
         
-        # Alteração: Adicionado hide_index=True para remover a numeração das linhas
         st.dataframe(df_display.style.map(colorir_status, subset=['Status']), use_container_width=True, hide_index=True)
     else:
         st.info("Nenhum faturamento nesta semana.")
@@ -271,7 +406,6 @@ def dashboard():
         df_exp_display['data_lancamento'] = df_exp_display['data_lancamento'].apply(formatar_data)
         df_exp_display.columns = ['Cliente', 'Valor', 'Status', 'Data']
         
-        # Alteração: Adicionado hide_index=True aqui também para manter o padrão sem numeração lateral
         st.dataframe(df_exp_display.style.map(colorir_status, subset=['Status']), use_container_width=True, hide_index=True)
     else:
         st.success("Tudo em dia! Nenhum faturamento pendente ou expirado.")
@@ -323,25 +457,19 @@ def lancar_novo():
 def pesquisar_faturamento():
     st.header("🔍 Pesquisar Faturamento")
     
-    # 1. Busca APENAS a coluna 'cliente' no banco (garante privacidade e leveza)
     try:
         dados_clientes = supabase.table("faturamentos").select("cliente").execute()
-        # Remove nomes duplicados e organiza em ordem alfabética
         lista_clientes = sorted(list(set([row['cliente'] for row in dados_clientes.data if row.get('cliente')])))
     except Exception as e:
         st.error("Erro ao carregar a lista de clientes.")
         lista_clientes = []
 
-    # Cria as opções do menu com o texto inicial neutro
     opcoes_menu = ["Selecione um cliente..."] + lista_clientes
     
-    # 2. Menu de seleção exibindo APENAS os nomes dos clientes
     cliente_selecionado = st.selectbox("Selecione o Cliente", options=opcoes_menu)
     
-    # 3. Os faturamentos e valores SÓ aparecem se um cliente real for clicado
     if cliente_selecionado != "Selecione um cliente...":
         
-        # Busca os dados completos (valores, status, etc.) APENAS do cliente selecionado
         res = supabase.table("faturamentos").select("*, usuarios(nome)").eq("cliente", cliente_selecionado).execute()
         rows = res.data
         
@@ -351,7 +479,6 @@ def pesquisar_faturamento():
                 v_brl = formatar_brl(row['valor'])
                 d_pt = formatar_data(row['data_lancamento'])
                 
-                # Os valores financeiros só aparecem aqui dentro, após a seleção
                 with st.expander(f"{row['cliente']} - {v_brl} ({d_pt})"):
                     st.write(f"**Lançado por:** {nome_usuario}")
                     st.write(f"**Arquivo original:** {row['arquivo_nome']}")
@@ -488,7 +615,6 @@ def main():
         
         cargo_atual = st.session_state['cargo']
         
-        # 🚨 BLOQUEIO TOTAL PARA O CARGO USER
         if cargo_atual == 'USER':
             st.sidebar.error("🔒 Acesso Bloqueado")
             st.error("⚠️ **Erro de Permissão:** Seu nível de acesso (**USER**) não tem autorização para visualizar nenhuma funcionalidade deste sistema. Entre em contato com o administrador.")
@@ -499,27 +625,21 @@ def main():
                 st.session_state.clear()
                 st.rerun()
             
-            return # Interrompe o script aqui para impedir o carregamento de menus ou páginas
+            return
         
-        # Definição dos menus baseado nos demais cargos
         if cargo_atual == 'SUPERVISOR':
-            # SUPERVISOR só pode ver o menu "Lançar Novo"
             menus_disponiveis = ["Lançar Novo"]
-            # Força a seleção para "Lançar Novo" se estiver em outro menu
             if 'menu_selecionado' not in st.session_state or st.session_state['menu_selecionado'] not in menus_disponiveis:
                 st.session_state['menu_selecionado'] = "Lançar Novo"
         else:
-            # Outros cargos (ADMIN, MASTER, etc.) têm acesso a todos os menus
             menus_disponiveis = ["Dashboard", "Lançar Novo", "Pesquisar Faturamento", "Relatórios"]
             if cargo_atual == 'MASTER':
                 menus_disponiveis.append("Log Interno")
         
-        # Para SUPERVISOR, não mostramos o seletor de menu, apenas fixamos em "Lançar Novo"
         if cargo_atual == 'SUPERVISOR':
             st.sidebar.info("🔒 Você está no modo SUPERVISOR - Acesso apenas à tela de lançamento")
             escolha = "Lançar Novo"
         else:
-            # Para outros cargos, mostramos o menu normal
             escolha = st.sidebar.radio("Navegar para:", menus_disponiveis)
         
         st.sidebar.divider()
@@ -528,7 +648,6 @@ def main():
             st.session_state.clear()
             st.rerun()
 
-        # Executa a função correspondente ao menu selecionado
         if escolha == "Dashboard":
             dashboard()
         elif escolha == "Lançar Novo":
