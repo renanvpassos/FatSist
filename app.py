@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 import hashlib
 from fpdf import FPDF
 import io
-import time
 import base64
 
 # ==========================================
@@ -84,10 +83,13 @@ def mostrar_intro():
         </style>
     """, unsafe_allow_html=True)
     
+    # Obtém a logo em base64
+    logo_base64 = get_logo_base64()
+    
     # Container da intro com a logo
     intro_html = f"""
         <div id="intro-container" class="intro-container">
-            <img src="data:image/png;base64,{get_logo_base64()}" class="logo-image" alt="Logo">
+            <img src="data:image/png;base64,{logo_base64}" class="logo-image" alt="Logo">
             <div class="loader">
                 <div class="dot"></div>
                 <div class="dot"></div>
@@ -97,24 +99,25 @@ def mostrar_intro():
             </div>
             <div class="loading-text">CARREGANDO...</div>
         </div>
+        
+        <script>
+            // Aguarda 5 segundos e depois remove a intro com fade-out
+            setTimeout(function() {{
+                var container = document.getElementById('intro-container');
+                if (container) {{
+                    container.classList.add('fade-out');
+                    // Remove completamente do DOM após a animação
+                    setTimeout(function() {{
+                        if (container) {{
+                            container.style.display = 'none';
+                        }}
+                    }}, 1000);
+                }}
+            }}, 5000);
+        </script>
     """
     
     st.markdown(intro_html, unsafe_allow_html=True)
-    
-    # Aguarda 5 segundos
-    time.sleep(5)
-    
-    # Adiciona classe fade-out para esvanecer
-    st.markdown("""
-        <script>
-            setTimeout(function() {
-                document.getElementById('intro-container').classList.add('fade-out');
-            }, 100);
-        </script>
-    """, unsafe_allow_html=True)
-    
-    # Pequena pausa para o fade-out
-    time.sleep(1)
 
 def get_logo_base64():
     """Obtém a logo do repositório GitHub em base64"""
@@ -126,13 +129,14 @@ def get_logo_base64():
         # Se não encontrar, tenta carregar do GitHub
         try:
             import requests
+            # Substitua pelo seu usuário e repositório
             url = "https://raw.githubusercontent.com/seu-usuario/seu-repositorio/main/logoMult.png"
-            response = requests.get(url)
+            response = requests.get(url, timeout=5)
             if response.status_code == 200:
                 return base64.b64encode(response.content).decode()
         except:
             pass
-        # Fallback: retorna uma imagem placeholder simples (texto)
+        # Fallback: retorna uma imagem placeholder simples
         return "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
 # ==========================================
@@ -240,7 +244,7 @@ def registrar_log(acao, detalhes):
                 "detalhes": detalhes
             }).execute()
         except Exception as e:
-            pass # Evita travar o app se o log falhar
+            pass
 
 def hash_senha(senha):
     return hashlib.sha256(senha.encode()).hexdigest()
@@ -325,7 +329,6 @@ def dashboard():
     ultimo_domingo = hoje - timedelta(days=(hoje.weekday() + 1) % 7)
     proximo_domingo = ultimo_domingo + timedelta(days=7)
     
-    # Buscar faturamentos reais do período
     res = supabase.table("faturamentos")\
         .select("id, cliente, valor, status, data_lancamento")\
         .gte("data_lancamento", ultimo_domingo.strftime("%Y-%m-%d"))\
@@ -335,7 +338,6 @@ def dashboard():
     totais = {'FATURADO': 0.0, 'PENDENTE': 0.0, 'PAGO': 0.0}
     df_semana = pd.DataFrame(res.data)
     
-    # --- INTEGRAÇÃO DA REGRA DE NEGÓCIO (CLIENTES PENDENTES NA DATA) ---
     linhas_extras = []
     if not df_semana.empty:
         df_semana['data_lancamento'] = df_semana['data_lancamento'].astype(str)
@@ -365,7 +367,6 @@ def dashboard():
                 "data_lancamento": data_hoje_str
             })
         df_semana = pd.DataFrame(linhas_extras)
-    # -------------------------------------------------------------------
         
     if not df_semana.empty:
         for status_tipo in totais.keys():
@@ -469,7 +470,6 @@ def pesquisar_faturamento():
     cliente_selecionado = st.selectbox("Selecione o Cliente", options=opcoes_menu)
     
     if cliente_selecionado != "Selecione um cliente...":
-        
         res = supabase.table("faturamentos").select("*, usuarios(nome)").eq("cliente", cliente_selecionado).execute()
         rows = res.data
         
