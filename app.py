@@ -521,33 +521,28 @@ def pesquisar_faturamento():
                         hex_str = row['arquivo_blob'].replace('\\x', '')
                         bytes_zip = bytes.fromhex(hex_str)
                         
+                        # Definir a lista de arquivos para evitar o NameError
+                        try:
+                            with zipfile.ZipFile(io.BytesIO(bytes_zip)) as z:
+                                lista_arquivos = z.namelist()
+                        except:
+                            lista_arquivos = []
+
                         # 2. Oferecer download do ZIP completo
                         st.download_button(
-                            label="📥 Baixar todos os arquivos (ZIP)", 
+                            label="📥 Baixar arquivo (ZIP)", 
                             data=bytes_zip, 
                             file_name=f"faturamento_{row['id']}.zip", 
                             key=f"dl_zip_{row['id']}"
                         )
                         
-                        # 3. Listar e baixar apenas o arquivo real (excluindo pastas internas do formato .xlsx)
-                        with zipfile.ZipFile(io.BytesIO(bytes_zip)) as z:
-                            # Filtra para pegar apenas arquivos que pareçam ser o documento, 
-                            # ou simplesmente ignore as pastas internas se você souber o nome original.
-                            # Uma forma comum é buscar pelo arquivo que está na raiz do zip.
-                            arquivos_uteis = [f for f in z.namelist() if "/" not in f]
-                        
-                            if not arquivos_uteis:
-                                # Se estiver tudo dentro de pastas (como no seu caso), 
-                                # você pode exibir apenas um botão "Baixar Arquivo" que é o próprio ZIP renomeado
-                                st.download_button(
-                                    label=f"📄 Baixar arquivo original",
-                                    data=bytes_zip,
-                                    file_name=f"{cliente_selecionado}.xlsx", # Nome amigável
-                                    key=f"dl_single_{row['id']}"
-                                )
-                            else:
-                                # Se houver arquivos soltos na raiz, mostra eles
-                                for nome_arquivo in arquivos_uteis:
+                        # 3. Mostrar individuais apenas se houver mais de um arquivo E 
+                        # não for apenas a estrutura interna do Excel
+                        if len(lista_arquivos) > 1 and not any(f.endswith('.xml') for f in lista_arquivos[:3]):
+                            st.write("---")
+                            st.write("ou baixe individualmente:")
+                            for nome_arquivo in lista_arquivos:
+                                with zipfile.ZipFile(io.BytesIO(bytes_zip)) as z:
                                     st.download_button(
                                         label=f"📄 {nome_arquivo}",
                                         data=z.read(nome_arquivo),
