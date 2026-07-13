@@ -517,62 +517,20 @@ def pesquisar_faturamento():
                     st.write(f"**Lançado por:** {nome_usuario}")
                     
                     if row.get('arquivo_blob'):
-                        # 1. Recuperar o ZIP (que na verdade é o seu arquivo XLSX)
+                        # 1. Recuperar o binário do banco
                         hex_str = row['arquivo_blob'].replace('\\x', '')
                         bytes_arquivo = bytes.fromhex(hex_str)
                         
-                        # Definimos um nome amigável para o arquivo final
-                        nome_arquivo_final = f"faturamento_{row['id']}.xlsx"
-                        
-                        # 2. Oferecer download do arquivo único (o Excel completo)
-                        # Removemos a necessidade de iterar com zipfile, 
-                        # pois queremos que ele baixe o arquivo inteiro.
+                        # 2. Oferecer download do arquivo como .xlsx (funciona para todos os casos)
+                        # Nomeamos o arquivo para manter a consistência
                         st.download_button(
                             label="📥 Baixar Arquivo (Excel)", 
                             data=bytes_arquivo, 
-                            file_name=nome_arquivo_final, 
+                            file_name=f"faturamento_{row['id']}.xlsx", 
                             key=f"dl_excel_{row['id']}"
                         )
-                        
-                        # Se você ainda precisa listar outros arquivos que NÃO sejam Excel, 
-                        # você pode manter uma lógica separada, mas para o XLSX, 
-                        # o botão acima é o suficiente.
-                        
-                        # 3. Mostrar individuais apenas se houver mais de um arquivo E 
-                        # não for apenas a estrutura interna do Excel
-                        if len(lista_arquivos) > 1 and not any(f.endswith('.xml') for f in lista_arquivos[:3]):
-                            st.write("---")
-                            st.write("ou baixe individualmente:")
-                            for nome_arquivo in lista_arquivos:
-                                with zipfile.ZipFile(io.BytesIO(bytes_zip)) as z:
-                                    st.download_button(
-                                        label=f"📄 {nome_arquivo}",
-                                        data=z.read(nome_arquivo),
-                                        file_name=nome_arquivo,
-                                        key=f"dl_{row['id']}_{nome_arquivo}"
-                                    )
-                            
-                        # LÓGICA ALTERADA: Só mostra os individuais se houver MAIS de 1 arquivo
-                        if len(lista_arquivos) > 1:
-                            st.write("---")
-                            st.write("ou baixe individualmente:")
-                            
-                            with zipfile.ZipFile(io.BytesIO(bytes_zip)) as z:
-                                for nome_arquivo in lista_arquivos:
-                                    conteudo_arquivo = z.read(nome_arquivo)
-                                    
-                                    st.download_button(
-                                        label=f"📄 {nome_arquivo}",
-                                        data=conteudo_arquivo,
-                                        file_name=nome_arquivo,
-                                        key=f"dl_{row['id']}_{nome_arquivo}"
-                                    )
-                        else:
-                            # Se for apenas 1 arquivo, você pode optar por exibir um botão direto 
-                            # ou apenas deixar o download do ZIP que já resolve.
-                            nome_unico = lista_arquivos[0]
-                            st.info(f"Este faturamento contém apenas um arquivo: **{nome_unico}**")
                     
+                    # 3. Controles de Status e Exclusão
                     novo_status = st.selectbox("Alterar Status", ['PENDENTE', 'FATURADO', 'PAGO'], index=['PENDENTE', 'FATURADO', 'PAGO'].index(row['status']), key=f"st_{row['id']}")
                     
                     c1, c2 = st.columns(2)
@@ -584,7 +542,7 @@ def pesquisar_faturamento():
                         
                     if c2.button("Excluir Faturamento", type="primary", key=f"del_{row['id']}"):
                         st.session_state[f"confirm_del_{row['id']}"] = True
-                        
+                    
                     if st.session_state.get(f"confirm_del_{row['id']}", False):
                         st.warning("⚠️ Tem certeza absoluta que deseja excluir este faturamento?")
                         if st.button("Sim, Confirmar Exclusão", key=f"conf_yes_{row['id']}"):
