@@ -172,13 +172,16 @@ def lancar_novo():
             df = pd.read_excel(arquivo)
             col_valor = [col for col in df.columns if col.upper() == 'VALOR']
             if col_valor:
-                # 1. Converte a coluna inteira para números, tratando erros
+                # 1. Converte a coluna para números
                 valores_coluna = pd.to_numeric(df[col_valor[0]], errors='coerce')
                 
-                # 2. .iloc[:-1] ignora a última linha preenchida antes de fazer o .sum()
+                # 2. Ignora a última linha preenchida e soma
                 valor_total = float(valores_coluna.iloc[:-1].sum())
                 
-                st.success(f"Valor total calculado da planilha (última linha ignorada): R$ {valor_total:.2f}")
+                # 3. Formatação padrão BRL (Substitui vírgula americana por ponto e ponto por vírgula)
+                valor_brl = f"R$ {valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                
+                st.success(f"Valor total calculado da planilha (última linha ignorada): {valor_brl}")
             else:
                 st.error("Coluna 'Valor' não encontrada na planilha.")
         except Exception as e:
@@ -188,7 +191,7 @@ def lancar_novo():
     botao_desabilitado = not concordo or arquivo is None or valor_total == 0.0
     
     if st.button("Lançar Faturamento", disabled=botao_desabilitado):
-        # Converte os bytes do arquivo para uma String Hexadecimal compatível com o tipo BYTEA via API REST
+        # Converte os bytes do arquivo para uma String Hexadecimal
         blob_hex = f"\\x{arquivo.getvalue().hex()}"
         data_hoje = datetime.today().strftime("%Y-%m-%d")
         
@@ -203,7 +206,10 @@ def lancar_novo():
                 "lancado_por": st.session_state['user_id']
             }).execute()
             
-            registrar_log("INSERÇÃO", f"Faturamento de R$ {valor_total} lançado para {cliente}.")
+            # Formata também para salvar um texto bonito no log de auditoria
+            valor_brl_log = f"R$ {valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            registrar_log("INSERÇÃO", f"Faturamento de {valor_brl_log} lançado para {cliente}.")
+            
             st.success("Faturamento lançado com sucesso com status PENDENTE!")
         except Exception as e:
             st.error(f"Erro ao salvar no banco de dados: {e}")
