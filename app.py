@@ -529,15 +529,18 @@ def pesquisar_faturamento():
                             key=f"dl_{row['id']}_{idx}"
                         )
                     
+                    # Na função pesquisar_faturamento:
                     if row.get('arquivo_blob'):
-                        try:
-                            hex_str = row['arquivo_blob']
-                            if hex_str.startswith('\\x'):
-                                hex_str = hex_str[2:]
-                            bytes_arquivo = bytes.fromhex(hex_str)
-                            st.download_button(label="📥 Fazer Download da Planilha", data=bytes_arquivo, file_name=row['arquivo_nome'], key=f"dl_{row['id']}")
-                        except:
-                            st.caption("Não foi possível processar o arquivo anexo.")
+                        hex_str = row['arquivo_blob'].replace('\\x', '')
+                        bytes_zip = bytes.fromhex(hex_str)
+                        
+                        # Criar um botão para baixar o pacote completo (mais fácil)
+                        st.download_button(
+                            label="📥 Baixar todos os arquivos (ZIP)", 
+                            data=bytes_zip, 
+                            file_name=f"faturamento_{row['id']}.zip", 
+                            key=f"dl_{row['id']}"
+                        )
                     
                     novo_status = st.selectbox("Alterar Status", ['PENDENTE', 'FATURADO', 'PAGO'], index=['PENDENTE', 'FATURADO', 'PAGO'].index(row['status']), key=f"st_{row['id']}")
                     
