@@ -189,7 +189,7 @@ if 'intro_exibida' not in st.session_state:
 # CONFIGURAÇÃO GLOBAL DE CLIENTES DO SISTEMA
 # ==========================================
 LISTA_CLIENTES = [
-    "GOLS SAO", "GOLS RIO", "ZF-GROUP", "WARTSILA", "VITOPEL", "LPCO ROCHE", "LPCO MERCK", 
+    "GOLS SAO", "GOLS RIO", "GOLS SUL", "ZF-GROUP", "WARTSILA", "VITOPEL", "LPCO ROCHE", "LPCO MERCK", 
     "LPCO SIGMA", "LPCO ABB", "LPCO LEGO", "LPCO LVMH", "LPCO CALIBRE", "DTA ROQUETTE", "DTA SERAL OTIS"
 ]
 
